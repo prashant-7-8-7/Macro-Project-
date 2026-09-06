@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Document Workspace</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- LEFT SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-layer-group"></i> Workspace</h2>
+            </div>
+            
+            <div class="upload-section" id="upload-zone">
+                <input type="file" id="file-input" class="hidden-input" accept=".pdf,.txt,.docx,.csv,.json">
+                <div class="upload-prompt">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <p>Drag & Drop or Click to Upload</p>
+                    <span class="file-types">PDF, TXT, DOCX</span>
+                </div>
+                <div class="upload-progress hidden" id="upload-progress">
+                    <div class="spinner"></div>
+                    <p>Processing...</p>
+                </div>
+            </div>
+
+            <div class="documents-section">
+                <h3>Library</h3>
+                <ul id="documents-list" class="doc-list">
+                    <!-- Documents populated here -->
+                </ul>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA (Empty State or Document View) -->
+        <main class="main-content">
+            <!-- Empty State -->
+            <div id="empty-state" class="empty-state">
+                <i class="fa-regular fa-folder-open"></i>
+                <h2>Select a document to begin</h2>
+                <p>Upload a new file or select one from your library to read, summarize, and ask questions.</p>
+            </div>
+
+            <!-- Document Workspace (Hidden initially) -->
+            <div id="document-workspace" class="document-workspace hidden">
+                
+                <!-- Document Viewer (Left Side) -->
+                <section class="document-viewer">
+                    <header class="viewer-header">
+                        <h2 id="viewer-title">Document Title</h2>
+                        <div class="viewer-meta" id="viewer-meta">PDF • 2 pages</div>
+                    </header>
+                    <div class="viewer-content" id="viewer-content">
+                        <div class="skeleton-loader">
+                            <div class="line"></div>
+                            <div class="line"></div>
+                            <div class="line"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- AI Assistant (Right Side) -->
+                <section class="ai-assistant">
+                    <header class="assistant-header">
+                        <h3><i class="fa-solid fa-sparkles"></i> AI Assistant</h3>
+                        <button id="btn-summarize" class="btn-primary-outline"><i class="fa-solid fa-bolt"></i> Summarize</button>
+                    </header>
+                    
+                    <div class="chat-container" id="chat-container">
+                        <div class="chat-message ai-message">
+                            <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                            <div class="message-content">Hello! I'm ready to answer any questions about this document.</div>
+                        </div>
+                        <!-- Chat messages injected here -->
+                    </div>
+                    
+                    <div class="chat-input-area">
+                        <div class="input-wrapper">
+                            <input type="text" id="chat-input" placeholder="Ask a question about this document...">
+                            <button id="btn-send"><i class="fa-solid fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Template for Source Citations -->
+    <template id="citation-template">
+        <div class="citation-box">
+            <h4><i class="fa-solid fa-quote-left"></i> Source References</h4>
+            <ul class="citation-list"></ul>
+        </div>
+    </template>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

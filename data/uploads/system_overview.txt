@@ -1,0 +1,5 @@
+The AI Document Retrieval System is an advanced hybrid search engine designed to combine the power of relational SQL and dense vector embeddings. 
+It uses SQLite's FTS5 for fast BM25 lexical keyword matching. 
+Simultaneously, it generates semantic embeddings for every document chunk, allowing it to understand the actual meaning and intent behind user queries.
+Reciprocal Rank Fusion (RRF) is utilized to combine the scores from both systems, ensuring highly relevant search results.
+This architecture enables both strict relational metadata filtering (like finding documents by a specific author or date) and fuzzy conceptual searching.
