@@ -1,3 +1,6 @@
+from src.quiz.generator import generate_questions
+from src.quiz.validator import validate_questions
+from src.quiz.schemas import QuizGenerateRequest, QuizResponse
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -64,14 +67,22 @@ async def index(request: Request):
 async def upload_document(file: UploadFile = File(...), pipeline: IngestionPipeline = Depends(get_pipeline)):
     file_path = UPLOAD_DIR / file.filename
     try:
+        content = await file.read()
+        if not content:
+            raise ValueError("Uploaded file is empty.")
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(content)
             
         result = pipeline.process_file(str(file_path))
         return JSONResponse(status_code=200, content=result)
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Error processing document during upload")
         if file_path.exists():
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/search")
@@ -152,3 +163,53 @@ async def summarize_doc(doc_id: str, repo: DocumentRepository = Depends(get_repo
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@app.post("/api/quiz/generate", response_model=QuizResponse)
+async def generate_quiz(
+    request: QuizGenerateRequest,
+    repo: DocumentRepository = Depends(get_repo),
+):
+    try:
+        # Get chunks belonging ONLY to this document
+        contexts = repo.get_document_chunks_content(
+            request.document_id
+        )
+
+        if not contexts:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found or contains no text."
+            )
+
+        # Generate candidate questions
+        questions = generate_questions(
+            contexts=contexts,
+            num_questions=request.num_questions,
+            difficulty=request.difficulty,
+        )
+
+        # Independently validate generated questions
+        verified, rejected = validate_questions(
+            questions,
+            contexts,
+        )
+
+        return QuizResponse(
+            document_id=request.document_id,
+            questions=verified,
+            generated_count=len(questions),
+            verified_count=len(verified),
+            rejected_count=len(rejected),
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Quiz generation failed"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
