@@ -15,12 +15,18 @@ const chatContainer = document.getElementById('chat-container');
 const chatInput = document.getElementById('chat-input');
 const btnSend = document.getElementById('btn-send');
 const btnSummarize = document.getElementById('btn-summarize');
-
+// Quiz Maker Elements
+const quizQuestionCount = document.getElementById('quiz-question-count');
+const quizDifficulty = document.getElementById('quiz-difficulty');
+const btnGenerateQuiz = document.getElementById('btn-generate-quiz');
+const quizStatus = document.getElementById('quiz-status');
+const quizResults = document.getElementById('quiz-results');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadDocuments();
     setupUpload();
     setupChat();
+    setupQuiz();
 });
 
 // --- API Calls ---
@@ -316,4 +322,202 @@ async function handleFileUpload(file) {
         uploadZone.querySelector('.upload-prompt').classList.remove('hidden');
         fileInput.value = ''; // reset
     }
+}
+// =====================================================
+// QUIZ MAKER
+// =====================================================
+
+function setupQuiz() {
+    if (!btnGenerateQuiz) return;
+
+    btnGenerateQuiz.addEventListener('click', generateQuiz);
+}
+
+async function generateQuiz() {
+    if (!activeDocumentId) {
+        showQuizStatus("Please select a document first.", "error");
+        return;
+    }
+
+    const numQuestions = parseInt(quizQuestionCount.value);
+    const difficulty = quizDifficulty.value;
+
+    // Reset previous results
+    quizResults.innerHTML = '';
+    quizResults.classList.add('hidden');
+
+    showQuizStatus(
+        `<div class="spinner"></div> Generating and verifying your quiz...`,
+        "loading"
+    );
+
+    btnGenerateQuiz.disabled = true;
+
+    try {
+        const res = await fetch('/api/quiz/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                document_id: activeDocumentId,
+                num_questions: numQuestions,
+                difficulty: difficulty
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || "Quiz generation failed.");
+        }
+
+        if (!data.questions || data.questions.length === 0) {
+            showQuizStatus(
+                `No questions could be verified. Generated: ${data.generated_count}, Rejected: ${data.rejected_count}.`,
+                "error"
+            );
+            return;
+        }
+
+        showQuizStatus(
+            `✓ ${data.verified_count} verified questions generated`,
+            "success"
+        );
+
+        renderQuiz(data.questions);
+
+    } catch (err) {
+        console.error("Quiz generation error:", err);
+
+        showQuizStatus(
+            `Failed to generate quiz: ${err.message}`,
+            "error"
+        );
+
+    } finally {
+        btnGenerateQuiz.disabled = false;
+    }
+}
+
+
+function showQuizStatus(message, type) {
+    quizStatus.className = `quiz-status ${type}`;
+    quizStatus.innerHTML = message;
+    quizStatus.classList.remove('hidden');
+}
+
+
+function renderQuiz(questions) {
+    quizResults.innerHTML = '';
+
+    questions.forEach((question, index) => {
+
+        const questionCard = document.createElement('div');
+        questionCard.className = 'quiz-question-card';
+
+        const optionsHTML = question.options.map(option => `
+            <label class="quiz-option">
+                <input
+                    type="radio"
+                    name="question-${index}"
+                    value="${escapeHTML(option.label)}"
+                >
+                <span class="option-label">${escapeHTML(option.label)}</span>
+            </label>
+        `).join('');
+
+        questionCard.innerHTML = `
+            <div class="quiz-question-header">
+                <span class="question-number">
+                    Question ${index + 1}
+                </span>
+
+                <span class="verified-badge">
+                    <i class="fa-solid fa-circle-check"></i>
+                    Verified
+                </span>
+            </div>
+
+            <h4 class="quiz-question">
+                ${escapeHTML(question.question)}
+            </h4>
+
+            <div class="quiz-options">
+                ${optionsHTML}
+            </div>
+
+            <div class="quiz-metadata">
+
+                <span>
+                    <i class="fa-solid fa-layer-group"></i>
+                    ${escapeHTML(question.topic || 'General')}
+                </span>
+
+                <span>
+                    <i class="fa-solid fa-signal"></i>
+                    ${escapeHTML(question.difficulty || 'Mixed')}
+                </span>
+
+                <span>
+                    <i class="fa-solid fa-brain"></i>
+                    ${escapeHTML(question.bloom_level || 'Understand')}
+                </span>
+
+            </div>
+
+            <div class="quiz-source">
+                <i class="fa-solid fa-link"></i>
+                Source: Page ${question.source_page || 1}
+                • Chunk ${escapeHTML(String(question.source_chunk_id || 'N/A'))}
+            </div>
+
+            <button
+                class="show-answer-btn"
+                onclick="showQuizAnswer(this, ${index})"
+            >
+                Show Answer
+            </button>
+
+            <div class="quiz-answer hidden">
+                <strong>
+                    <i class="fa-solid fa-check"></i>
+                    Correct Answer:
+                </strong>
+
+                ${escapeHTML(question.correct_answer)}
+            </div>
+        `;
+
+        quizResults.appendChild(questionCard);
+    });
+
+    quizResults.classList.remove('hidden');
+
+    quizResults.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+    });
+}
+
+
+function showQuizAnswer(button, index) {
+    const card = button.closest('.quiz-question-card');
+    const answer = card.querySelector('.quiz-answer');
+
+    answer.classList.toggle('hidden');
+
+    if (answer.classList.contains('hidden')) {
+        button.textContent = 'Show Answer';
+    } else {
+        button.textContent = 'Hide Answer';
+    }
+}
+
+
+// Prevent HTML injection when displaying generated content
+function escapeHTML(value) {
+    const div = document.createElement('div');
+    div.textContent = value ?? '';
+    return div.innerHTML;
 }
