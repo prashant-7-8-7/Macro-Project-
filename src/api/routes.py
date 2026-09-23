@@ -15,7 +15,7 @@ from typing import List, Optional
 from src.config import UPLOAD_DIR
 from src.ingestion.pipeline import IngestionPipeline
 from src.retrieval.engine import HybridSearchEngine
-from src.ai.rag import synthesize_answer, summarize_document
+from src.ai.rag import synthesize_answer, summarize_document, generate_notes
 from src.database.repository import DocumentRepository
 
 app = FastAPI(title="AI Document Retrieval API")

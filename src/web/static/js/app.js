@@ -1,5 +1,6 @@
 // Global State
 let activeDocumentId = null;
+window.activeDocumentId = null;
 
 // DOM Elements
 const uploadZone = document.getElementById('upload-zone');
@@ -110,6 +111,8 @@ function renderDocumentsList(docs) {
 
 async function openDocument(docId, filename, sizeKB) {
     activeDocumentId = docId;
+    window.activeDocumentId = docId;
+    window.activeDocumentFilename = filename;
     
     // Update Sidebar Selection
     document.querySelectorAll('.doc-item').forEach(el => el.classList.remove('active'));
@@ -154,6 +157,8 @@ async function openDocument(docId, filename, sizeKB) {
 
 function closeDocument() {
     activeDocumentId = null;
+    window.activeDocumentId = null;
+    window.activeDocumentFilename = null;
     emptyState.classList.remove('hidden');
     documentWorkspace.classList.add('hidden');
 }

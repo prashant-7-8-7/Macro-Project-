@@ -129,11 +129,17 @@
 
                         <h3><i class="fa-solid fa-sparkles"></i> AI Assistant</h3>
 
-                        <button id="btn-summarize" class="btn-primary-outline">
+                        <div style="display:flex;gap:8px;">
 
-                            <i class="fa-solid fa-bolt"></i> Summarize
+                            <button id="btn-make-notes" class="btn-primary-outline">
+                                <i class="fa-solid fa-pen-nib"></i> Make Notes
+                            </button>
 
-                        </button>
+                            <button id="btn-summarize" class="btn-primary-outline">
+                                <i class="fa-solid fa-bolt"></i> Summarize
+                            </button>
+
+                        </div>
 
                     </header>
 
@@ -315,9 +321,110 @@
     </template>
 
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
+    <!-- Notes Modal -->
+    <div id="notes-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 16px;">
+        <div style="max-width:860px;margin:0 auto;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                <div style="display:flex;gap:10px;">
+                    <button id="notes-btn-print" style="background:#2d8a4e;border:none;border-radius:8px;padding:10px 18px;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">🖨 Print / Save PDF</button>
+                </div>
+                <button id="notes-btn-close" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 18px;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">✕ Close</button>
+            </div>
+            <div id="notes-notebook"></div>
+        </div>
+    </div>
+
+    <!-- Notes Loading Overlay -->
+    <div id="notes-loading" style="display:none;position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,0.92);flex-direction:column;align-items:center;justify-content:center;gap:18px;">
+        <div style="font-size:2.8rem;animation:nf-write 0.5s ease-in-out infinite alternate;">✏️</div>
+        <div style="font-family:'Caveat',cursive;font-size:1.5rem;color:#fff;">Writing your notes...</div>
+        <div style="width:180px;height:7px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;background:linear-gradient(90deg,#f4a261,#e07a30);border-radius:4px;animation:nf-bar 2.5s ease-in-out infinite;"></div>
+        </div>
+        <div id="notes-loading-step" style="font-size:0.85rem;color:#a7a9be;">Extracting document text...</div>
+    </div>
+
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&family=Kalam:wght@400;700&display=swap');
+    @keyframes nf-write { from{transform:rotate(-5deg) translateY(0)} to{transform:rotate(5deg) translateY(-4px)} }
+    @keyframes nf-bar { 0%{width:0%} 50%{width:100%} 100%{width:0%} }
+    @keyframes nf-in { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+    .nf-page {
+        background-color:#faf8f0;
+        background-image:
+            linear-gradient(90deg,transparent 59px,rgba(230,100,100,.35) 59px,rgba(230,100,100,.35) 62px,transparent 62px),
+            repeating-linear-gradient(transparent,transparent 31px,#b8d4e8 31px,#b8d4e8 32px);
+        background-size:100% 32px;
+        border-radius:4px 14px 14px 4px;
+        padding:36px 48px 48px 88px;
+        position:relative;
+        min-height:60vh;
+    }
+    .nf-spiral { position:absolute;left:-14px;top:0;bottom:0;width:28px;display:flex;flex-direction:column;align-items:center;padding:26px 0;gap:20px;z-index:2; }
+    .nf-ring { width:24px;height:24px;border:3.5px solid #5a5a6e;border-radius:50%;background:#e8e0d0;box-shadow:inset 0 2px 4px rgba(0,0,0,.2),0 2px 4px rgba(0,0,0,.15);flex-shrink:0; }
+    .nf-ph { font-family:'Patrick Hand',cursive; }
+    .nf-kalam { font-family:'Kalam',cursive; }
+    .nf-caveat { font-family:'Caveat',cursive; }
+
+    .nf-page-header { border-bottom:3px solid #1a1a2e;padding-bottom:18px;margin-bottom:26px; }
+    .nf-subject { font-family:'Patrick Hand',cursive;font-size:.82rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#5a5a6e;margin-bottom:6px; }
+    .nf-title { font-family:'Kalam',cursive;font-size:clamp(1.8rem,4vw,2.8rem);font-weight:700;color:#1a1a2e;text-transform:uppercase;letter-spacing:1.5px;text-decoration:underline;text-decoration-color:#c62828;text-decoration-thickness:3px;text-underline-offset:5px;line-height:1.2; }
+    .nf-quote { font-family:'Caveat',cursive;font-size:1.05rem;color:#3a3a4e;font-style:italic;padding-left:14px;border-left:3px solid #e65100;margin-top:12px; }
+
+    .nf-section { display:flex;flex-direction:column;gap:9px;margin-bottom:22px;animation:nf-in .4s ease both; }
+    .nf-sec-header { display:flex;align-items:center;gap:11px; }
+    .nf-num { width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Kalam',cursive;font-size:1rem;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15); }
+    .nf-heading { font-family:'Kalam',cursive;font-size:1.2rem;font-weight:700;padding-bottom:3px;border-bottom:2px solid currentColor;line-height:1.3; }
+    .nf-body { padding-left:43px;display:flex;flex-direction:column;gap:9px; }
+    .nf-body.split { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+    .nf-text { font-family:'Patrick Hand',cursive;font-size:.98rem;color:#2a2a3e;line-height:1.9; }
+    .nf-bullets { list-style:none;display:flex;flex-direction:column;gap:6px; }
+    .nf-bullets li { font-family:'Patrick Hand',cursive;font-size:.96rem;color:#2a2a3e;display:flex;align-items:flex-start;gap:9px;line-height:1.6; }
+    .nf-bullets li::before { content:'→';flex-shrink:0;font-weight:700;margin-top:1px; }
+    .nf-key { border:2px dashed currentColor;border-radius:8px;padding:12px 14px;background:rgba(255,255,255,.6); }
+    .nf-key-title { font-family:'Kalam',cursive;font-size:.88rem;font-weight:700;margin-bottom:7px; }
+    .nf-key ul { list-style:none;display:flex;flex-direction:column;gap:4px; }
+    .nf-key ul li { font-family:'Patrick Hand',cursive;font-size:.88rem;color:#2a2a3e;display:flex;gap:7px;line-height:1.5; }
+    .nf-key ul li::before { content:'⟶';flex-shrink:0;font-weight:700; }
+    .nf-tip { display:flex;align-items:flex-start;gap:9px;background:rgba(255,236,153,.4);border:1.5px dashed #d4a017;border-radius:8px;padding:10px 12px;margin-top:4px; }
+    .nf-tip span { font-family:'Patrick Hand',cursive;font-size:.88rem;color:#5a3e00;line-height:1.6; }
+    .nf-divider { border:none;border-top:1.5px dashed rgba(0,0,0,.1);margin:2px 0; }
+    .nf-cmp { display:grid;grid-template-columns:1fr auto 1fr;border:2px solid #ddd;border-radius:8px;overflow:hidden; }
+    .nf-cmp-col { padding:12px; }
+    .nf-cmp-title { font-family:'Kalam',cursive;font-size:.87rem;font-weight:700;text-align:center;margin-bottom:8px;padding:3px 6px;border-radius:4px;background:rgba(0,0,0,.05); }
+    .nf-cmp-div { width:2px;background:#ddd;position:relative; }
+    .nf-cmp-div::before { content:'VS';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Kalam',cursive;font-size:.68rem;font-weight:700;color:#888;background:#faf8f0;padding:2px 3px; }
+    .nf-cmp-col ul { list-style:none;display:flex;flex-direction:column;gap:4px; }
+    .nf-cmp-col ul li { font-family:'Patrick Hand',cursive;font-size:.83rem;color:#2a2a3e;padding-left:12px;position:relative;line-height:1.5; }
+    .nf-cmp-col ul li::before { content:'•';position:absolute;left:0;font-weight:700; }
+    .nf-footer { margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+    .nf-takeaway { background:rgba(45,138,78,.08);border:2px solid rgba(45,138,78,.3);border-radius:8px;padding:14px 16px; }
+    .nf-takeaway h3 { font-family:'Kalam',cursive;font-size:.95rem;color:#2d8a4e;display:flex;align-items:center;gap:5px;margin-bottom:8px; }
+    .nf-takeaway ul { list-style:none;display:flex;flex-direction:column;gap:5px; }
+    .nf-takeaway ul li { font-family:'Patrick Hand',cursive;font-size:.85rem;color:#1a2e1a;display:flex;gap:7px;line-height:1.5; }
+    .nf-takeaway ul li::before { content:'✓';color:#2d8a4e;font-weight:700;flex-shrink:0; }
+    .nf-remember { background:rgba(255,193,7,.1);border:2px solid rgba(255,193,7,.4);border-radius:8px;padding:14px 16px; }
+    .nf-remember h3 { font-family:'Kalam',cursive;font-size:.95rem;color:#7a5a00;display:flex;align-items:center;gap:5px;margin-bottom:8px; }
+    .nf-remember ul { list-style:none;display:flex;flex-direction:column;gap:5px; }
+    .nf-remember ul li { font-family:'Patrick Hand',cursive;font-size:.85rem;color:#3a2e00;display:flex;gap:7px;line-height:1.5; }
+    .nf-remember ul li::before { content:'★';color:#d4a017;flex-shrink:0; }
+
+    /* Color themes */
+    .nf-green .nf-num{background:#2d8a4e;color:#fff} .nf-green .nf-heading{color:#2d8a4e;border-bottom-color:#2d8a4e} .nf-green .nf-bullets li::before{color:#2d8a4e} .nf-green .nf-key{color:#2d8a4e;background:#e8f5e9}
+    .nf-blue  .nf-num{background:#1565c0;color:#fff} .nf-blue  .nf-heading{color:#1565c0;border-bottom-color:#1565c0} .nf-blue  .nf-bullets li::before{color:#1565c0} .nf-blue  .nf-key{color:#1565c0;background:#e3f2fd}
+    .nf-red   .nf-num{background:#c62828;color:#fff} .nf-red   .nf-heading{color:#c62828;border-bottom-color:#c62828} .nf-red   .nf-bullets li::before{color:#c62828} .nf-red   .nf-key{color:#c62828;background:#ffebee}
+    .nf-orange.nf-num{background:#e65100;color:#fff} .nf-orange .nf-heading{color:#e65100;border-bottom-color:#e65100} .nf-orange .nf-bullets li::before{color:#e65100} .nf-orange .nf-key{color:#e65100;background:#fff3e0}
+    .nf-purple.nf-num{background:#6a1b9a;color:#fff} .nf-purple .nf-heading{color:#6a1b9a;border-bottom-color:#6a1b9a} .nf-purple .nf-bullets li::before{color:#6a1b9a} .nf-purple .nf-key{color:#6a1b9a;background:#f3e5f5}
+    .nf-teal  .nf-num{background:#00695c;color:#fff} .nf-teal  .nf-heading{color:#00695c;border-bottom-color:#00695c} .nf-teal  .nf-bullets li::before{color:#00695c} .nf-teal  .nf-key{color:#00695c;background:#e0f2f1}
+    @media print { #notes-modal{position:relative!important;background:white!important;} #notes-btn-close,#notes-btn-print{display:none!important;} }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/notes.js"></script>
 
 </body>
 

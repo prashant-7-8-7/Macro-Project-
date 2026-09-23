@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from google import genai
 
 from src.quiz.schemas import QuizQuestion
+from src.ai.rag import call_gemini
 
 load_dotenv()
 
@@ -102,15 +103,16 @@ DOCUMENT CONTENT:
 {context_block}
 """
 
-    client = _get_client()
-
     try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
+        raw_text = call_gemini(
+            prompt,
+            max_attempts_per_model=1,
         )
 
-        raw_text = response.text.strip()
+        if not raw_text:
+            raise RuntimeError("All Gemini models are currently unavailable.")
+
+        raw_text = raw_text.strip()
 
         # Handle accidental markdown fences.
         if raw_text.startswith("```"):
