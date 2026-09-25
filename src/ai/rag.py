@@ -9,17 +9,19 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 
-# Models are tried in order. Flash-Lite is intended for high-throughput use.
-GEMINI_MODELS = [
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.8-flash",
+import json
+import urllib.request
+import urllib.error
+
+# Models are tried in order.
+LLM_MODELS = [
+    "meta-llama/llama-3.1-8b-instruct"
 ]
 
 
-def call_gemini(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
+def call_llm(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
     """
-    Central Gemini caller with retry + model fallback.
+    Central LLM caller with retry + model fallback.
 
     Returns:
         Generated text, or None if all configured models fail.
@@ -27,45 +29,54 @@ def call_gemini(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
     api_key = os.environ.get("GEMINI_API_KEY")
 
     if not api_key:
-        logger.warning("GEMINI_API_KEY is not configured.")
+        logger.warning("API key is not configured.")
         return None
 
-    try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-    except Exception as e:
-        logger.exception("Could not initialize Gemini client: %s", e)
-        return None
+    url = "https://openrouter.ai/api/v1/chat/completions"
 
-    for model in GEMINI_MODELS:
+    for model in LLM_MODELS:
         for attempt in range(1, max_attempts_per_model + 1):
             try:
                 logger.info(
-                    "Calling Gemini model=%s attempt=%d/%d",
+                    "Calling OpenRouter model=%s attempt=%d/%d",
                     model,
                     attempt,
                     max_attempts_per_model,
                 )
 
-                response = client.models.generate_content(
-                    model=model,
-                    contents=prompt,
+                data = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.4,
+                    "max_tokens": 4096
+                }
+                req = urllib.request.Request(
+                    url, 
+                    data=json.dumps(data).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    },
+                    method="POST"
                 )
 
-                text = getattr(response, "text", None)
+                with urllib.request.urlopen(req) as response:
+                    res_body = response.read().decode("utf-8")
+                    res_json = json.loads(res_body)
+                    text = res_json.get("choices", [{}])[0].get("message", {}).get("content", "")
 
                 if text and text.strip():
-                    logger.info("Gemini request succeeded with model=%s", model)
+                    logger.info("Groq request succeeded with model=%s", model)
                     return text.strip()
 
                 logger.warning(
-                    "Gemini returned an empty response from model=%s",
+                    "Groq returned an empty response from model=%s",
                     model,
                 )
 
             except Exception as e:
                 logger.warning(
-                    "Gemini failed: model=%s attempt=%d error=%s",
+                    "Groq failed: model=%s attempt=%d error=%s",
                     model,
                     attempt,
                     e,
@@ -80,7 +91,7 @@ def call_gemini(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
             max_attempts_per_model,
         )
 
-    logger.error("All Gemini models failed.")
+    logger.error("All Groq models failed.")
     return None
 
 
@@ -144,10 +155,10 @@ Question: {query}
 Answer:
 """
 
-    answer = call_gemini(prompt)
+    answer = call_llm(prompt)
 
     if answer is None:
-        logger.warning("Gemini unavailable. Using local Q&A fallback.")
+        logger.warning("LLM unavailable. Using local Q&A fallback.")
         answer = fallback_synthesize(prompt)
 
     return {
@@ -192,14 +203,14 @@ Document Text:
 {combined_text}
 """
 
-    answer = call_gemini(prompt)
+    answer = call_llm(prompt)
 
     if answer is None:
         logger.warning(
-            "Gemini unavailable for summarization."
+            "LLM unavailable for summarization."
         )
         answer = (
-            "*(Gemini is temporarily unavailable.)*\n\n"
+            "*(AI is temporarily unavailable.)*\n\n"
             "The document was successfully retrieved, but an "
             "AI-generated summary could not be produced right now."
         )
@@ -212,10 +223,10 @@ Document Text:
 
 def fallback_synthesize(prompt: str) -> str:
     """
-    Local fallback when no Gemini model is available.
+    Local fallback when no LLM is available.
     """
     return (
-        "*(Gemini is temporarily unavailable. "
+        "*(AI is temporarily unavailable. "
         "Showing retrieval fallback.)*\n\n"
         "The system successfully retrieved relevant document "
         "content, but an AI-generated conversational answer "
@@ -269,16 +280,16 @@ Document Text:
 Generate the notes below:
 """
 
-    notes = call_gemini(prompt)
+    notes = call_llm(prompt)
 
     if notes is None:
         logger.warning(
-            "Gemini unavailable for notes generation."
+            "LLM unavailable for notes generation."
         )
         notes = (
             "# Notes temporarily unavailable\n\n"
             "The document was successfully processed, but "
-            "Gemini is temporarily unavailable. Please try "
+            "AI is temporarily unavailable. Please try "
             "generating the notes again."
         )
 

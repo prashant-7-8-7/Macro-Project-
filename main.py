@@ -19,5 +19,9 @@ if __name__ == "__main__":
     # Ensure database is initialized before starting server
     init_db()
     
+    # Get port from environment variable (default to 8000 for local)
+    import os
+    port = int(os.environ.get("PORT", 8000))
+    
     # Run the FastAPI server
-    uvicorn.run("src.api.routes:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("src.api.routes:app", host="0.0.0.0", port=port, reload=False)

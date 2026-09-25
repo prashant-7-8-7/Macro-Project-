@@ -3,12 +3,9 @@
    Hooks into the existing app via activeDocumentId global
    ============================================================ */
 
-const GEMINI_API_KEY = 'AIzaSyDIbPFwQ8pyunYaDE_jmthM8Zejl9-0Wsw';
+const GEMINI_API_KEY = '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';
 const CANDIDATE_MODELS = [
-    'gemini-2.5-flash',
-    'gemini-3.5-flash',
-    'gemini-flash-latest',
-    'gemini-3.6-flash'
+    'meta-llama/llama-3.1-8b-instruct'
 ];
 
 // DOM refs
@@ -70,7 +67,7 @@ async function handleMakeNotes() {
         const docTitle = window.activeDocumentFilename || data.document?.filename || 'Document Notes';
 
         // Step 2: call Gemini
-        setStep('🤖 Generating notes with Gemini AI...');
+        setStep('🤖 Generating notes with Groq AI...');
         const notesData = await callGemini(text, docTitle);
 
         // Step 3: render
@@ -100,22 +97,29 @@ async function callGemini(text, docTitle) {
 
     for (const model of CANDIDATE_MODELS) {
         for (let attempt = 1; attempt <= 2; attempt++) {
-            setStep(`🤖 Generating notes with Gemini (${model})...`);
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+            setStep(`🤖 Generating notes with AI (${model})...`);
+            const url = `https://openrouter.ai/api/v1/chat/completions`;
 
             try {
                 const res = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${GEMINI_API_KEY}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'RAG System'
+                    },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { temperature: 0.4, topK: 32, topP: 0.95, maxOutputTokens: 4096 }
+                        model: model,
+                        messages: [{ role: 'user', content: prompt }],
+                        temperature: 0.4,
+                        max_tokens: 4096
                     })
                 });
 
                 if (res.ok) {
                     const data = await res.json();
-                    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    const raw = data?.choices?.[0]?.message?.content || '';
                     return parseJSON(raw);
                 }
 
@@ -136,7 +140,7 @@ async function callGemini(text, docTitle) {
         }
     }
 
-    throw lastError || new Error('Unable to connect to Gemini API. Please check your network or try again.');
+    throw lastError || new Error('Unable to connect to Groq API. Please check your network or try again.');
 }
 
 // ── Prompt Builder ───────────────────────────────────────────

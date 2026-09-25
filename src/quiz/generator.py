@@ -4,25 +4,14 @@ import os
 from typing import List, Dict
 
 from dotenv import load_dotenv
-from google import genai
-
 from src.quiz.schemas import QuizQuestion
-from src.ai.rag import call_gemini
+from src.ai.rag import call_llm
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)    
 
-MODEL_NAME = "gemini-3.5-flash"
-
-
-def _get_client():
-    api_key = os.environ.get("GEMINI_API_KEY")
-
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is not configured.")
-
-    return genai.Client(api_key=api_key)
+MODEL_NAME = "llama-3.3-70b-versatile"
 
 
 def generate_questions(
@@ -104,26 +93,29 @@ DOCUMENT CONTENT:
 """
 
     try:
-        raw_text = call_gemini(
+        raw_text = call_llm(
             prompt,
             max_attempts_per_model=1,
         )
 
         if not raw_text:
-            raise RuntimeError("All Gemini models are currently unavailable.")
+            raise RuntimeError("All AI models are currently unavailable.")
 
         raw_text = raw_text.strip()
 
-        # Handle accidental markdown fences.
-        if raw_text.startswith("```"):
-            raw_text = raw_text.replace("```json", "", 1)
-            raw_text = raw_text.replace("```", "")
-            raw_text = raw_text.strip()
+        # Robust JSON extraction: Find the first '[' and last ']'
+        start_idx = raw_text.find('[')
+        end_idx = raw_text.rfind(']')
 
-        data = json.loads(raw_text)
+        if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
+            json_str = raw_text[start_idx:end_idx+1]
+        else:
+            json_str = raw_text
+
+        data = json.loads(json_str)
 
         if not isinstance(data, list):
-            raise ValueError("Gemini response is not a JSON list.")
+            raise ValueError("AI response is not a JSON list.")
 
         questions = []
 
