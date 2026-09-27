@@ -1,7 +1,7 @@
 from src.quiz.generator import generate_questions
 from src.quiz.validator import validate_questions
 from src.quiz.schemas import QuizGenerateRequest, QuizResponse
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -64,7 +64,7 @@ async def index(request: Request):
 
 # --- API Routes ---
 @app.post("/api/upload")
-async def upload_document(file: UploadFile = File(...), pipeline: IngestionPipeline = Depends(get_pipeline)):
+async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), pipeline: IngestionPipeline = Depends(get_pipeline)):
     file_path = UPLOAD_DIR / file.filename
     try:
         content = await file.read()
@@ -73,7 +73,7 @@ async def upload_document(file: UploadFile = File(...), pipeline: IngestionPipel
         with open(file_path, "wb") as buffer:
             buffer.write(content)
             
-        result = pipeline.process_file(str(file_path))
+        result = pipeline.process_file(str(file_path), background_tasks=background_tasks)
         return JSONResponse(status_code=200, content=result)
     except Exception as e:
         import logging
@@ -147,6 +147,52 @@ async def get_document_content(doc_id: str, repo: DocumentRepository = Depends(g
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@app.post("/api/documents/{doc_id}/notes")
+async def create_document_notes(
+    doc_id: str,
+    repo: DocumentRepository = Depends(get_repo)
+):
+    try:
+        chunks = repo.get_document_chunks_content(doc_id)
+
+        if not chunks:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found or contains no text."
+            )
+
+        docs = repo.get_all_documents()
+        doc_info = next(
+            (d for d in docs if d["id"] == doc_id),
+            None
+        )
+
+        title = (
+            doc_info["filename"]
+            if doc_info
+            else "Document Notes"
+        )
+
+        response = generate_notes(title, chunks)
+
+        return {
+            "document_id": doc_id,
+            "filename": title,
+            **response
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Notes generation failed"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 @app.post("/api/documents/{doc_id}/summarize")
 async def summarize_doc(doc_id: str, repo: DocumentRepository = Depends(get_repo)):
