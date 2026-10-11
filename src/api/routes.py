@@ -19,8 +19,18 @@ from src.ai.rag import synthesize_answer, summarize_document, generate_notes
 from src.database.repository import DocumentRepository
 
 from src.database.db import init_db
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="AI Document Retrieval API")
+
+# Enable CORS for external frontend hosting (e.g. Vercel)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 def on_startup():
