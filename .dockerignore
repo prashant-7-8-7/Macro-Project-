@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.backup
+*.db-journal
+all_work_for_chatgpt.txt
+data/uploads/*
+!data/uploads/.gitkeep

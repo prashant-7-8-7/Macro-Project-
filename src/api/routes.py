@@ -18,7 +18,13 @@ from src.retrieval.engine import HybridSearchEngine
 from src.ai.rag import synthesize_answer, summarize_document, generate_notes
 from src.database.repository import DocumentRepository
 
+from src.database.db import init_db
+
 app = FastAPI(title="AI Document Retrieval API")
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 # Setup Web Directories
 BASE_DIR = Path(__file__).resolve().parent.parent
