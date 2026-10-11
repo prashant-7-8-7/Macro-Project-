@@ -316,7 +316,10 @@ async function handleFileUpload(file) {
             body: formData
         });
         
-        if (!res.ok) throw new Error("Upload failed");
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || "Upload failed");
+        }
         
         await loadDocuments();
         

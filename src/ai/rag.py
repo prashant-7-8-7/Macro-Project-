@@ -15,7 +15,9 @@ import urllib.error
 
 # Models are tried in order.
 LLM_MODELS = [
-    "meta-llama/llama-3.1-8b-instruct"
+    "meta-llama/llama-3.1-8b-instruct",
+    "meta-llama/llama-3.3-70b-instruct",
+    "mistralai/mistral-7b-instruct"
 ]
 
 
@@ -60,7 +62,7 @@ def call_llm(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
                     method="POST"
                 )
 
-                with urllib.request.urlopen(req) as response:
+                with urllib.request.urlopen(req, timeout=60) as response:
                     res_body = response.read().decode("utf-8")
                     res_json = json.loads(res_body)
                     text = res_json.get("choices", [{}])[0].get("message", {}).get("content", "")

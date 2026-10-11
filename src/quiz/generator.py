@@ -30,9 +30,15 @@ def generate_questions(
     if not contexts:
         return []
 
-    source_text = []
+    # If there are many chunks, sample diverse chunks to prevent token limits
+    if len(contexts) > 40:
+        step = max(1, len(contexts) // 30)
+        selected_contexts = contexts[::step][:35]
+    else:
+        selected_contexts = contexts
 
-    for i, ctx in enumerate(contexts):
+    source_text = []
+    for i, ctx in enumerate(selected_contexts):
         source_text.append(
             f"""
 SOURCE {i + 1}
@@ -95,7 +101,7 @@ DOCUMENT CONTENT:
     try:
         raw_text = call_llm(
             prompt,
-            max_attempts_per_model=1,
+            max_attempts_per_model=2,
         )
 
         if not raw_text:

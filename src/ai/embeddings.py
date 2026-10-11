@@ -18,9 +18,11 @@ class EmbeddingEngine:
         self.model = None
         self.use_fallback = False
         try:
+            import torch
             from sentence_transformers import SentenceTransformer
-            logger.info(f"Loading embedding model: {EMBEDDING_MODEL_NAME}...")
-            self.model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Loading embedding model: {EMBEDDING_MODEL_NAME} on device: {device}...")
+            self.model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device)
             logger.info("Model loaded successfully.")
         except Exception as e:
             logger.warning(f"Failed to load sentence-transformers: {e}. Using fallback TF-IDF embeddings.")

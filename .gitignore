@@ -25,5 +25,11 @@ Thumbs.db
 .vscode/
 .idea/
 
-# We will intentionally NOT ignore data/ so that the SQLite DB
-# is uploaded to GitHub, allowing the portfolio project to have pre-loaded data!
+# Temp and backup files
+*.backup
+all_work_for_chatgpt.txt
+requirements_utf8.txt
+
+# Personal uploaded data files (keep directory, ignore arbitrary files)
+data/uploads/*
+!data/uploads/.gitkeep

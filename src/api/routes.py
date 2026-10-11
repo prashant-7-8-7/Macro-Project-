@@ -72,8 +72,7 @@ async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = 
             raise ValueError("Uploaded file is empty.")
         with open(file_path, "wb") as buffer:
             buffer.write(content)
-            
-        result = pipeline.process_file(str(file_path), background_tasks=background_tasks)
+        result = pipeline.process_file(str(file_path))
         return JSONResponse(status_code=200, content=result)
     except Exception as e:
         import logging
