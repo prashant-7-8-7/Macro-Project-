@@ -2,6 +2,11 @@
 let activeDocumentId = null;
 window.activeDocumentId = null;
 
+// API Base URL (defaults to Render API if hosted externally like Vercel)
+const API_BASE_URL = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1') || window.location.hostname.includes('onrender.com')
+    ? ''
+    : 'https://macro-project-a63n.onrender.com';
+
 // DOM Elements
 const uploadZone = document.getElementById('upload-zone');
 const fileInput = document.getElementById('file-input');
@@ -32,19 +37,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- API Calls ---
 async function fetchDocuments() {
-    const res = await fetch('/api/documents');
+    const res = await fetch(`${API_BASE_URL}/api/documents`);
     const data = await res.json();
     return data.documents;
 }
 
 async function fetchDocumentContent(docId) {
-    const res = await fetch(`/api/documents/${docId}/content`);
+    const res = await fetch(`${API_BASE_URL}/api/documents/${docId}/content`);
     if (!res.ok) throw new Error("Failed to load document content");
     return await res.json();
 }
 
 async function deleteDocument(docId) {
-    await fetch(`/api/documents/${docId}`, { method: 'DELETE' });
+    await fetch(`${API_BASE_URL}/api/documents/${docId}`, { method: 'DELETE' });
     if (activeDocumentId === docId) {
         closeDocument();
     }
@@ -52,7 +57,7 @@ async function deleteDocument(docId) {
 }
 
 async function askQuestion(query, docId) {
-    const res = await fetch('/api/qa', {
+    const res = await fetch(`${API_BASE_URL}/api/qa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: query, mode: "hybrid", top_k: 40, document_id: docId })
@@ -61,7 +66,7 @@ async function askQuestion(query, docId) {
 }
 
 async function summarizeDocument(docId) {
-    const res = await fetch(`/api/documents/${docId}/summarize`, {
+    const res = await fetch(`${API_BASE_URL}/api/documents/${docId}/summarize`, {
         method: 'POST'
     });
     return await res.json();
@@ -311,7 +316,7 @@ async function handleFileUpload(file) {
     uploadProgress.classList.remove('hidden');
     
     try {
-        const res = await fetch('/api/upload', {
+        const res = await fetch(`${API_BASE_URL}/api/upload`, {
             method: 'POST',
             body: formData
         });
@@ -362,7 +367,7 @@ async function generateQuiz() {
     btnGenerateQuiz.disabled = true;
 
     try {
-        const res = await fetch('/api/quiz/generate', {
+        const res = await fetch(`${API_BASE_URL}/api/quiz/generate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

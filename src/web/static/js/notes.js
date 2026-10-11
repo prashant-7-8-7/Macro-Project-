@@ -57,7 +57,8 @@ async function handleMakeNotes() {
     try {
         // Step 1: fetch document chunks from existing API
         setStep('📖 Fetching document content...');
-        const res = await fetch(`/api/documents/${docId}/content`);
+        const baseUrl = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+        const res = await fetch(`${baseUrl}/api/documents/${docId}/content`);
         if (!res.ok) throw new Error('Could not load document content.');
         const data = await res.json();
 
