@@ -299,64 +299,104 @@ def fallback_synthesize(prompt: str) -> str:
 
 def generate_notes(doc_title: str, chunks: List[dict]) -> dict:
     """
-    Generates beautifully formatted, humanized study notes
-    from the document chunks.
+    Generates beautifully formatted, structured study notes
+    from the document chunks (JSON format for notebook renderer).
     """
     if not chunks:
         return {
-            "notes": "No document content found to generate notes.",
-            "citations": []
+            "notes": None,
+            "error": "No document content found to generate notes."
         }
 
     combined_text = "\n\n".join(
         [c.get("content", "") for c in chunks]
     )
 
-    if len(combined_text) > 80000:
+    if len(combined_text) > 40000:
         combined_text = (
-            combined_text[:80000]
+            combined_text[:40000]
             + "... (truncated for length)"
         )
 
-    prompt = f"""
-You are an expert educator and note-taker.
+    title_hint = f'Title suggestion: "{doc_title}"' if doc_title else ''
 
-Create beautiful, highly readable and structured study notes
-from the document titled "{doc_title}".
+    prompt = f"""You are an expert student note-maker. Generate structured study notes in JSON from the document below.
+{title_hint}
 
-Guidelines:
-- Use Markdown formatting.
-- Use clear headings and subheadings.
-- Use bold text for important terms.
-- Use concise bullet points.
-- Include definitions where the document provides them.
-- Include important examples from the document.
-- Highlight important points.
-- Add a short key-takeaways section.
-- Make the notes feel like carefully prepared human study notes.
-- Do NOT add facts that are not supported by the document.
-- Preserve the terminology used by the document.
+RULES:
+1. Use ONLY information from the document.
+2. Return ONLY valid JSON — no markdown fences.
+3. Generate 4-7 sections.
+4. For "color": use one of: green, blue, red, orange, purple, teal (alternate them).
+5. For "layout": "full" (text+bullets), "split" (text+bullets LEFT, keyBox RIGHT).
 
-Document Text:
+JSON structure:
+{{
+  "title": "{doc_title or 'Study Notes'}",
+  "subject": "Document Summary",
+  "quote": "Key quote under 100 chars",
+  "sections": [
+    {{
+      "number": 1,
+      "heading": "Section Heading",
+      "color": "green",
+      "layout": "split",
+      "content": "1-3 sentence explanation. Use **bold** for key terms.",
+      "bullets": ["Point one", "Point two"],
+      "keyBox": {{ "title": "⭐ Key Idea", "items": ["item 1", "item 2"] }},
+      "tip": "Remember: important tip"
+    }}
+  ],
+  "keyTakeaways": ["Takeaway 1", "Takeaway 2", "Takeaway 3"],
+  "remember": ["Fact 1", "Fact 2"]
+}}
+
+DOCUMENT:
 {combined_text}
 
-Generate the notes below:
-"""
+Return ONLY the raw JSON object."""
 
-    notes = call_llm(prompt)
+    raw_response = call_llm(prompt)
 
-    if notes is None:
-        logger.warning(
-            "LLM unavailable for notes generation."
-        )
-        notes = (
-            "# Notes temporarily unavailable\n\n"
-            "The document was successfully processed, but "
-            "AI is temporarily unavailable. Please try "
-            "generating the notes again."
-        )
+    if raw_response is None:
+        logger.warning("LLM unavailable for notes generation.")
+        return {
+            "notes": None,
+            "error": "AI is temporarily unavailable. Please verify GEMINI_API_KEY."
+        }
 
-    return {
-        "notes": notes,
-        "citations": []
-    }
+    # Clean code fences
+    s = str(raw_response).strip()
+    s = s.replace("```json", "").replace("```JSON", "").replace("```", "").strip()
+    start = s.find('{')
+    end = s.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        s = s[start:end+1]
+
+    try:
+        data = json.loads(s)
+        return {"notes": data}
+    except Exception as e:
+        logger.warning("Failed to parse JSON notes from LLM: %s", e)
+        # Fallback dictionary structure
+        return {
+            "notes": {
+                "title": doc_title or "Study Notes",
+                "subject": "Summary",
+                "quote": "Key concepts extracted from document",
+                "sections": [
+                    {
+                        "number": 1,
+                        "heading": "Overview",
+                        "color": "blue",
+                        "layout": "full",
+                        "content": s[:600],
+                        "bullets": ["Review complete document for details"],
+                        "keyBox": {"title": "Note", "items": ["Generated from document content"]},
+                        "tip": "Read original source for more context"
+                    }
+                ],
+                "keyTakeaways": ["Document parsed successfully"],
+                "remember": ["Review full document text"]
+            }
+        }

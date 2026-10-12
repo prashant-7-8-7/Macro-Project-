@@ -2,11 +2,7 @@
    notes.js — Handwritten Notes feature for the RAG Workspace
    Hooks into the existing app via activeDocumentId global
    ============================================================ */
-
-const GEMINI_API_KEY = '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';
-const CANDIDATE_MODELS = [
-    'meta-llama/llama-3.1-8b-instruct'
-];
+// Notes generation is securely handled by the backend API (/api/documents/{id}/notes)
 
 // DOM refs
 const notesModal = document.getElementById('notes-modal');
@@ -55,27 +51,27 @@ async function handleMakeNotes() {
     showNotesLoading(true);
 
     try {
-        // Step 1: fetch document chunks from existing API
-        setStep('📖 Fetching document content...');
+        // Step 1: Request backend to generate notes
+        setStep('🤖 Generating notes with AI...');
         const baseUrl = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
-        const res = await fetch(`${baseUrl}/api/documents/${docId}/content`);
-        if (!res.ok) throw new Error('Could not load document content.');
+        const res = await fetch(`${baseUrl}/api/documents/${docId}/notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || errData.error || `HTTP ${res.status}`);
+        }
         const data = await res.json();
+        if (!data.notes) {
+            throw new Error(data.error || 'Failed to generate notes. Check GEMINI_API_KEY.');
+        }
 
-        const text = (data.chunks || []).map(c => c.content).join('\n\n').trim();
-        if (text.length < 50) throw new Error('Document has too little text to make notes.');
-
-        const docTitle = window.activeDocumentFilename || data.document?.filename || 'Document Notes';
-
-        // Step 2: call Gemini
-        setStep('🤖 Generating notes with Groq AI...');
-        const notesData = await callGemini(text, docTitle);
-
-        // Step 3: render
+        // Step 2: render
         setStep('🎨 Rendering your handwritten notes...');
         await sleep(300);
 
-        renderNotes(notesData);
+        renderNotes(data.notes);
         showNotesLoading(false);
         notesModal.style.display = 'block';
 
