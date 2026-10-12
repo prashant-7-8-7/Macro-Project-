@@ -32,9 +32,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from starlette.concurrency import run_in_threadpool
+
 @app.on_event("startup")
 def on_startup():
     init_db()
+    # Pre-warm embedding engine in background thread so cold-start doesn't stall requests
+    import threading
+    def warmup():
+        try:
+            from src.ai.embeddings import EmbeddingEngine
+            EmbeddingEngine()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Embedding warmup warning: {e}")
+    threading.Thread(target=warmup, daemon=True).start()
 
 # Setup Web Directories
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -88,7 +100,7 @@ async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = 
             raise ValueError("Uploaded file is empty.")
         with open(file_path, "wb") as buffer:
             buffer.write(content)
-        result = pipeline.process_file(str(file_path))
+        result = await run_in_threadpool(pipeline.process_file, str(file_path))
         return JSONResponse(status_code=200, content=result)
     except Exception as e:
         import logging

@@ -21,19 +21,85 @@ LLM_MODELS = [
 ]
 
 
+def _call_gemini_api(api_key: str, prompt: str) -> Optional[str]:
+    """Direct Google Gemini REST caller."""
+    gemini_models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+    for model in gemini_models:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}]
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                if text and text.strip():
+                    logger.info("Gemini request succeeded with model=%s", model)
+                    return text.strip()
+        except Exception as e:
+            logger.warning("Gemini failed model=%s: %s", model, e)
+    return None
+
+def _call_groq_api(api_key: str, prompt: str) -> Optional[str]:
+    """Groq Cloud API caller."""
+    groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    for model in groq_models:
+        try:
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.4
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if text and text.strip():
+                    logger.info("Groq request succeeded with model=%s", model)
+                    return text.strip()
+        except Exception as e:
+            logger.warning("Groq failed model=%s: %s", model, e)
+    return None
+
 def call_llm(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
     """
-    Central LLM caller with retry + model fallback.
-
-    Returns:
-        Generated text, or None if all configured models fail.
+    Central LLM caller supporting Google Gemini, Groq, and OpenRouter.
+    Automatically detects the key provider.
     """
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY")
 
     if not api_key:
         logger.warning("API key is not configured.")
         return None
 
+    # 1. Google Gemini native key
+    if api_key.startswith("AIza"):
+        res = _call_gemini_api(api_key, prompt)
+        if res:
+            return res
+
+    # 2. Groq key
+    if api_key.startswith("gsk_"):
+        res = _call_groq_api(api_key, prompt)
+        if res:
+            return res
+
+    # 3. OpenRouter / OpenAI compatible fallback
     url = "https://openrouter.ai/api/v1/chat/completions"
 
     for model in LLM_MODELS:
@@ -68,17 +134,12 @@ def call_llm(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
                     text = res_json.get("choices", [{}])[0].get("message", {}).get("content", "")
 
                 if text and text.strip():
-                    logger.info("Groq request succeeded with model=%s", model)
+                    logger.info("LLM request succeeded with model=%s", model)
                     return text.strip()
-
-                logger.warning(
-                    "Groq returned an empty response from model=%s",
-                    model,
-                )
 
             except Exception as e:
                 logger.warning(
-                    "Groq failed: model=%s attempt=%d error=%s",
+                    "LLM failed: model=%s attempt=%d error=%s",
                     model,
                     attempt,
                     e,
