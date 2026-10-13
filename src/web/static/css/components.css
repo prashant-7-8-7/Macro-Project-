@@ -2640,6 +2640,57 @@ kbd.kbd-badge {
   width: 100%;
 }
 
+/* ============================================================
+   TOOLTIPS
+   ============================================================ */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: var(--z-popover);
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Tooltip positioned below for top bar elements */
+[data-tooltip-pos="bottom"]::after,
+.sidebar-header-actions [data-tooltip]::after,
+.assistant-actions [data-tooltip]::after {
+  bottom: auto;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.sidebar-header-actions [data-tooltip]:hover::after,
+.assistant-actions [data-tooltip]:hover::after {
+  transform: translateX(-50%) translateY(0);
+}
+
 
 
 
