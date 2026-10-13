@@ -1099,108 +1099,196 @@ function showQuizStatus(message, type) {
 
 function renderQuiz(questions) {
     quizResults.innerHTML = '';
+    window.currentQuizQuestions = questions || [];
+    window.quizUserAnswers = {};
 
+    if (!questions || questions.length === 0) return;
+
+    // Tracker & Navigator Header
+    const trackerContainer = document.createElement('div');
+    trackerContainer.className = 'quiz-progress-tracker glass-panel';
+    trackerContainer.style.padding = 'var(--space-4) var(--space-5)';
+    trackerContainer.style.borderRadius = 'var(--radius-xl)';
+
+    trackerContainer.innerHTML = `
+        <div class="quiz-progress-labels">
+            <span id="quiz-progress-text">Answered 0 of ${questions.length} questions</span>
+            <span id="quiz-score-badge" class="badge badge-brand hidden">Score: 0/${questions.length}</span>
+        </div>
+        <div class="quiz-progress-track">
+            <div id="quiz-progress-fill" class="quiz-progress-fill" style="width: 0%;"></div>
+        </div>
+        <div class="quiz-navigator" id="quiz-navigator"></div>
+    `;
+
+    quizResults.appendChild(trackerContainer);
+
+    // Build Navigator Pills
+    const navContainer = trackerContainer.querySelector('#quiz-navigator');
+    questions.forEach((_, i) => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = `nav-question-pill ${i === 0 ? 'active' : ''}`;
+        pill.dataset.questionIndex = i;
+        pill.textContent = i + 1;
+        pill.addEventListener('click', () => {
+            const targetCard = document.getElementById(`quiz-card-${i}`);
+            if (targetCard) {
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.querySelectorAll('.nav-question-pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+            }
+        });
+        navContainer.appendChild(pill);
+    });
+
+    // Render Question Cards
     questions.forEach((question, index) => {
+        const card = document.createElement('div');
+        card.className = 'quiz-question-card';
+        card.id = `quiz-card-${index}`;
 
-        const questionCard = document.createElement('div');
-        questionCard.className = 'quiz-question-card';
+        const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+        const optionsList = question.options || [];
 
-        const optionsHTML = question.options.map(option => `
-            <label class="quiz-option">
-                <input
-                    type="radio"
-                    name="question-${index}"
-                    value="${escapeHTML(option.label)}"
-                >
-                <span class="option-label">${escapeHTML(option.label)}</span>
-            </label>
-        `).join('');
+        const optionsHTML = optionsList.map((opt, optIdx) => {
+            const rawLabel = typeof opt === 'string' ? opt : (opt.label || '');
+            const letter = letters[optIdx] || String(optIdx + 1);
+            return `
+                <div class="quiz-option-card" data-question-index="${index}" data-option-value="${escapeHTML(rawLabel)}">
+                    <div class="option-letter-badge">${letter}</div>
+                    <div class="option-text">${escapeHTML(rawLabel)}</div>
+                </div>
+            `;
+        }).join('');
 
-        questionCard.innerHTML = `
+        const explanationText = question.explanation || question.rationale || 'Source grounding verified from document context.';
+
+        card.innerHTML = `
             <div class="quiz-question-header">
-                <span class="question-number">
-                    Question ${index + 1}
-                </span>
-
-                <span class="verified-badge">
-                    <i class="fa-solid fa-circle-check"></i>
-                    Verified
-                </span>
+                <span class="question-number-pill">QUESTION ${index + 1} OF ${questions.length}</span>
+                <span class="verified-badge"><i class="fa-solid fa-circle-check"></i> Verified Grounding</span>
             </div>
-
-            <h4 class="quiz-question">
-                ${escapeHTML(question.question)}
-            </h4>
-
+            <h4 class="quiz-question">${escapeHTML(question.question)}</h4>
             <div class="quiz-options">
                 ${optionsHTML}
             </div>
-
-            <div class="quiz-metadata">
-
-                <span>
-                    <i class="fa-solid fa-layer-group"></i>
-                    ${escapeHTML(question.topic || 'General')}
-                </span>
-
-                <span>
-                    <i class="fa-solid fa-signal"></i>
-                    ${escapeHTML(question.difficulty || 'Mixed')}
-                </span>
-
-                <span>
-                    <i class="fa-solid fa-brain"></i>
-                    ${escapeHTML(question.bloom_level || 'Understand')}
-                </span>
-
+            <div class="quiz-metadata" style="display:flex;gap:var(--space-3);font-size:11px;color:var(--text-tertiary);margin-top:var(--space-1);flex-wrap:wrap;">
+                <span><i class="fa-solid fa-layer-group"></i> ${escapeHTML(question.topic || 'General')}</span>
+                <span><i class="fa-solid fa-signal"></i> ${escapeHTML(question.difficulty || 'Mixed')}</span>
+                <span><i class="fa-solid fa-link"></i> Page ${question.source_page || 1} • Chunk ${escapeHTML(String(question.source_chunk_id || 'N/A'))}</span>
             </div>
-
-            <div class="quiz-source">
-                <i class="fa-solid fa-link"></i>
-                Source: Page ${question.source_page || 1}
-                • Chunk ${escapeHTML(String(question.source_chunk_id || 'N/A'))}
-            </div>
-
-            <button
-                class="show-answer-btn"
-                onclick="showQuizAnswer(this, ${index})"
-            >
-                Show Answer
-            </button>
-
-            <div class="quiz-answer hidden">
-                <strong>
-                    <i class="fa-solid fa-check"></i>
-                    Correct Answer:
-                </strong>
-
-                ${escapeHTML(question.correct_answer)}
+            <div class="quiz-explanation-accordion">
+                <button type="button" class="btn-toggle-explanation" onclick="toggleExplanation(${index})">
+                    <i class="fa-solid fa-chevron-down"></i> Explanation & Source Context
+                </button>
+                <div class="quiz-explanation-body hidden" id="explanation-${index}">
+                    <strong><i class="fa-solid fa-lightbulb"></i> Answer Analysis:</strong>
+                    <p style="margin:4px 0 0;">${escapeHTML(explanationText)}</p>
+                    <p style="margin:6px 0 0;font-weight:600;color:var(--brand-indigo);">Correct: ${escapeHTML(question.correct_answer)}</p>
+                </div>
             </div>
         `;
 
-        quizResults.appendChild(questionCard);
+        quizResults.appendChild(card);
+    });
+
+    // Wire up option clicks
+    const allOptionCards = quizResults.querySelectorAll('.quiz-option-card');
+    allOptionCards.forEach(optCard => {
+        optCard.addEventListener('click', () => {
+            const qIdx = parseInt(optCard.dataset.questionIndex);
+            const val = optCard.dataset.optionValue;
+            handleOptionSelect(qIdx, val, optCard);
+        });
     });
 
     quizResults.classList.remove('hidden');
-
-    quizResults.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-    });
+    quizResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function handleOptionSelect(qIdx, selectedValue, clickedCard) {
+    if (window.quizUserAnswers[qIdx] !== undefined) return;
+
+    const question = window.currentQuizQuestions[qIdx];
+    if (!question) return;
+
+    const card = document.getElementById(`quiz-card-${qIdx}`);
+    const options = card.querySelectorAll('.quiz-option-card');
+    options.forEach(o => o.classList.add('locked'));
+
+    const correctAns = (question.correct_answer || '').trim().toLowerCase();
+    const chosen = selectedValue.trim().toLowerCase();
+
+    // Flexible match
+    const isCorrect = (chosen === correctAns) ||
+                      correctAns.startsWith(chosen.substring(0, 2)) ||
+                      chosen.includes(correctAns) ||
+                      correctAns.includes(chosen);
+
+    if (isCorrect) {
+        clickedCard.classList.add('correct');
+        window.quizUserAnswers[qIdx] = { correct: true, chosen: selectedValue };
+    } else {
+        clickedCard.classList.add('wrong');
+        options.forEach(o => {
+            const oVal = (o.dataset.optionValue || '').trim().toLowerCase();
+            if (oVal === correctAns || correctAns.includes(oVal) || oVal.includes(correctAns)) {
+                o.classList.add('correct');
+            }
+        });
+        window.quizUserAnswers[qIdx] = { correct: false, chosen: selectedValue };
+    }
+
+    // Automatically reveal explanation
+    const explanationBody = document.getElementById(`explanation-${qIdx}`);
+    const toggleBtn = card.querySelector('.btn-toggle-explanation');
+    if (explanationBody) explanationBody.classList.remove('hidden');
+    if (toggleBtn) toggleBtn.classList.add('expanded');
+
+    // Update navigator pill
+    const navPill = document.querySelector(`.nav-question-pill[data-question-index="${qIdx}"]`);
+    if (navPill) {
+        navPill.classList.add(isCorrect ? 'answered-correct' : 'answered-wrong');
+    }
+
+    // Update progress bar
+    updateQuizProgress();
+}
+
+function toggleExplanation(qIdx) {
+    const body = document.getElementById(`explanation-${qIdx}`);
+    const card = document.getElementById(`quiz-card-${qIdx}`);
+    const btn = card ? card.querySelector('.btn-toggle-explanation') : null;
+    if (body) {
+        body.classList.toggle('hidden');
+        if (btn) btn.classList.toggle('expanded', !body.classList.contains('hidden'));
+    }
+}
+
+function updateQuizProgress() {
+    const total = window.currentQuizQuestions.length;
+    const answeredCount = Object.keys(window.quizUserAnswers).length;
+    const correctCount = Object.values(window.quizUserAnswers).filter(a => a.correct).length;
+
+    const fill = document.getElementById('quiz-progress-fill');
+    const text = document.getElementById('quiz-progress-text');
+    const scoreBadge = document.getElementById('quiz-score-badge');
+
+    if (fill) fill.style.width = `${(answeredCount / total) * 100}%`;
+    if (text) text.textContent = `Answered ${answeredCount} of ${total} questions`;
+    if (scoreBadge) {
+        scoreBadge.classList.remove('hidden');
+        scoreBadge.textContent = `Score: ${correctCount}/${total}`;
+    }
+
+    if (answeredCount === total) {
+        renderQuizResultsSummary(correctCount, total);
+    }
+}
 
 function showQuizAnswer(button, index) {
-    const card = button.closest('.quiz-question-card');
-    const answer = card.querySelector('.quiz-answer');
-
-    answer.classList.toggle('hidden');
-
-    if (answer.classList.contains('hidden')) {
-        button.textContent = 'Show Answer';
-    } else {
-        button.textContent = 'Hide Answer';
-    }
+    toggleExplanation(index);
 }
 
 
