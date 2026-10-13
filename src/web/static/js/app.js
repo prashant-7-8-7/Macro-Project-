@@ -411,30 +411,129 @@ function closeDocument() {
     documentWorkspace.classList.add('hidden');
 }
 
-function renderDocumentContent(chunks) {
+// Global cache of current document chunks for in-document search
+window.currentDocChunks = [];
+
+function renderDocumentContent(chunks, searchQuery = '') {
+    window.currentDocChunks = chunks || [];
     viewerContent.innerHTML = '';
+    
     if (!chunks || chunks.length === 0) {
-        viewerContent.innerHTML = '<p>No content extracted for this document.</p>';
+        viewerContent.innerHTML = `
+            <div class="empty-state-card glass-panel" style="margin: var(--space-8) auto; max-width: 420px; text-align: center;">
+                <div class="empty-state-icon-wrapper" style="width: 48px; height: 48px; font-size: 1.25rem;">
+                    <i class="fa-regular fa-file"></i>
+                </div>
+                <h3>No Content Available</h3>
+                <p>This document appears to be empty or has no readable text chunks.</p>
+            </div>
+        `;
         return;
     }
     
-    chunks.forEach(chunk => {
+    const query = (searchQuery || '').trim().toLowerCase();
+    let totalMatches = 0;
+    
+    chunks.forEach((chunk, index) => {
         const chunkDiv = document.createElement('div');
-        chunkDiv.className = 'viewer-chunk';
+        chunkDiv.className = 'viewer-chunk chunk-reveal';
+        // Stagger entrance animation
+        chunkDiv.style.animationDelay = `${Math.min(index * 0.04, 0.4)}s`;
+        chunkDiv.dataset.chunkIndex = chunk.chunk_index;
+        chunkDiv.dataset.pageNumber = chunk.page_number;
         
-        const pageMarker = document.createElement('div');
-        pageMarker.className = 'viewer-page-marker';
-        pageMarker.textContent = `Page ${chunk.page_number} (Chunk ${chunk.chunk_index})`;
+        // Chunk Header
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'viewer-chunk-header';
         
-        const textDiv = document.createElement('div');
-        // Simple formatting
-        textDiv.innerHTML = chunk.content.replace(/\\n/g, '<br>');
+        // Page/Chunk Marker
+        const markerSpan = document.createElement('div');
+        markerSpan.className = 'viewer-page-marker';
+        markerSpan.innerHTML = `
+            <span class="marker-dot"></span>
+            PAGE ${chunk.page_number} <span style="opacity:0.5">•</span> CHUNK ${chunk.chunk_index}
+        `;
         
-        chunkDiv.appendChild(pageMarker);
-        chunkDiv.appendChild(textDiv);
+        // Action Buttons (Copy Chunk + Ask AI)
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'chunk-actions';
+        
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn-chunk-action';
+        copyBtn.title = 'Copy chunk text to clipboard';
+        copyBtn.innerHTML = `<i class="fa-regular fa-copy"></i> Copy`;
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(chunk.content).then(() => {
+                copyBtn.classList.add('copied');
+                copyBtn.innerHTML = `<i class="fa-solid fa-check"></i> Copied!`;
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    copyBtn.innerHTML = `<i class="fa-regular fa-copy"></i> Copy`;
+                }, 2000);
+            });
+        });
+        
+        const askAiBtn = document.createElement('button');
+        askAiBtn.className = 'btn-chunk-action';
+        askAiBtn.title = 'Ask AI to explain or summarize this chunk';
+        askAiBtn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Ask AI`;
+        askAiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (chatInput) {
+                const preview = chunk.content.substring(0, 100).replace(/\s+/g, ' ').trim();
+                chatInput.value = `Explain this section from page ${chunk.page_number}: "${preview}..."`;
+                chatInput.focus();
+            }
+        });
+        
+        actionsDiv.appendChild(copyBtn);
+        actionsDiv.appendChild(askAiBtn);
+        
+        headerDiv.appendChild(markerSpan);
+        headerDiv.appendChild(actionsDiv);
+        
+        // Chunk Body
+        const bodyDiv = document.createElement('div');
+        bodyDiv.className = 'viewer-chunk-body';
+        
+        let contentHtml = chunk.content;
+        if (query) {
+            // Escape special regex chars
+            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escapedQuery})`, 'gi');
+            const matches = contentHtml.match(regex);
+            if (matches) {
+                totalMatches += matches.length;
+            }
+            contentHtml = contentHtml.replace(regex, '<mark class="search-highlight">$1</mark>');
+        }
+        
+        bodyDiv.innerHTML = contentHtml.replace(/\n/g, '<br>');
+        
+        chunkDiv.appendChild(headerDiv);
+        chunkDiv.appendChild(bodyDiv);
         viewerContent.appendChild(chunkDiv);
     });
+
+    // Update search count pill if search was active
+    const searchCountPill = document.getElementById('doc-search-count');
+    if (searchCountPill) {
+        if (query) {
+            searchCountPill.classList.remove('hidden');
+            if (totalMatches > 0) {
+                searchCountPill.textContent = `${totalMatches} ${totalMatches === 1 ? 'match' : 'matches'}`;
+                searchCountPill.className = 'doc-search-count-pill has-matches';
+            } else {
+                searchCountPill.textContent = 'No matches';
+                searchCountPill.className = 'doc-search-count-pill no-matches';
+            }
+        } else {
+            searchCountPill.classList.add('hidden');
+        }
+    }
 }
+
 
 // --- Chat & QA Logic ---
 function setupChat() {
