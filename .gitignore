@@ -35,3 +35,4 @@ requirements_utf8.txt
 data/uploads/*
 !data/uploads/.gitkeep
 documents.db
+scratch/
