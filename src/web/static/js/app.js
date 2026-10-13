@@ -168,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSidebarToggle();
     setupPanelResizer();
     setupLibrarySearch();
+    setupDocSearch();
     loadDocuments();
     setupUpload();
     setupChat();
@@ -351,10 +352,47 @@ function setupLibrarySearch() {
     }
 }
 
+// In-Document Text Search
+function setupDocSearch() {
+    const searchInput = document.getElementById('doc-search-input');
+    const searchClear = document.getElementById('doc-search-clear');
+
+    if (!searchInput) return;
+
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim();
+        if (searchClear) {
+            if (query) {
+                searchClear.classList.remove('hidden');
+            } else {
+                searchClear.classList.add('hidden');
+            }
+        }
+        renderDocumentContent(window.currentDocChunks, query);
+    });
+
+    if (searchClear) {
+        searchClear.addEventListener('click', () => {
+            searchInput.value = '';
+            searchClear.classList.add('hidden');
+            renderDocumentContent(window.currentDocChunks, '');
+            searchInput.focus();
+        });
+    }
+}
+
 async function openDocument(docId, filename, sizeKB) {
     activeDocumentId = docId;
     window.activeDocumentId = docId;
     window.activeDocumentFilename = filename;
+    
+    // Reset in-document search state
+    const docSearchInput = document.getElementById('doc-search-input');
+    const docSearchClear = document.getElementById('doc-search-clear');
+    const docSearchCount = document.getElementById('doc-search-count');
+    if (docSearchInput) docSearchInput.value = '';
+    if (docSearchClear) docSearchClear.classList.add('hidden');
+    if (docSearchCount) docSearchCount.classList.add('hidden');
     
     // Update Sidebar Selection
     document.querySelectorAll('.doc-item').forEach(el => el.classList.remove('active'));
