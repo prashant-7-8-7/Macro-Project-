@@ -647,19 +647,24 @@ function setupChat() {
     btnSummarize.addEventListener('click', async () => {
         if (!activeDocumentId) return;
         
+        btnSummarize.classList.add('is-loading');
+        btnSummarize.innerHTML = '<i class="fa-solid fa-spinner"></i> Summarizing...';
         appendMessage('user', 'Please summarize this document.');
-        appendMessage('ai', '<div class="spinner" style="margin: 0; width: 16px; height: 16px;"></div> <em>Reading document...</em>', 'temp-loader');
+        showTypingIndicator();
         
         try {
             const res = await summarizeDocument(activeDocumentId);
-            document.getElementById('temp-loader').remove();
+            hideTypingIndicator();
             
             // Render markdown answer
             const rawHtml = marked.parse(res.answer);
             appendMessage('ai', rawHtml);
         } catch (err) {
-            document.getElementById('temp-loader').remove();
+            hideTypingIndicator();
             appendMessage('ai', `<span style="color: #ef4444;">Failed to generate summary. Make sure GEMINI_API_KEY is set.</span>`);
+        } finally {
+            btnSummarize.classList.remove('is-loading');
+            btnSummarize.innerHTML = '<i class="fa-solid fa-bolt"></i> Summarize';
         }
     });
 }
@@ -668,13 +673,16 @@ async function handleSendChat() {
     const text = chatInput.value.trim();
     if (!text || !activeDocumentId) return;
     
+    window.lastUserQuestion = text;
     chatInput.value = '';
+    // Auto reset textarea height if resized
+    chatInput.style.height = 'auto';
     appendMessage('user', text);
-    appendMessage('ai', '<div class="spinner" style="margin: 0; width: 16px; height: 16px;"></div> <em>Thinking...</em>', 'temp-loader');
+    showTypingIndicator();
     
     try {
         const res = await askQuestion(text, activeDocumentId);
-        document.getElementById('temp-loader').remove();
+        hideTypingIndicator();
         
         const rawHtml = marked.parse(res.answer);
         appendMessage('ai', rawHtml);
@@ -684,9 +692,60 @@ async function handleSendChat() {
         }
         
     } catch (err) {
-        document.getElementById('temp-loader').remove();
+        hideTypingIndicator();
         appendMessage('ai', `<span style="color: #ef4444;">An error occurred while answering.</span>`);
     }
+}
+
+function showTypingIndicator() {
+    hideTypingIndicator();
+    const div = document.createElement('div');
+    div.className = 'chat-message ai-message';
+    div.id = 'ai-typing-loader';
+    div.innerHTML = `
+        <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+        <div class="message-content">
+            <div class="typing-indicator" title="AI is thinking...">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+            </div>
+        </div>
+    `;
+    chatContainer.appendChild(div);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const loader = document.getElementById('ai-typing-loader');
+    if (loader) loader.remove();
+    const tempLoader = document.getElementById('temp-loader');
+    if (tempLoader) tempLoader.remove();
+}
+
+function enhanceCodeBlocks(container) {
+    if (!container) return;
+    const preBlocks = container.querySelectorAll('pre');
+    preBlocks.forEach(pre => {
+        if (pre.querySelector('.btn-code-copy')) return;
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn-code-copy';
+        copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const code = pre.querySelector('code');
+            const textToCopy = code ? code.innerText : pre.innerText;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                copyBtn.classList.add('copied');
+                copyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+                }, 2000);
+            });
+        });
+        pre.appendChild(copyBtn);
+    });
 }
 
 function appendMessage(sender, contentHTML, id = null) {
@@ -701,8 +760,13 @@ function appendMessage(sender, contentHTML, id = null) {
         <div class="message-content">${contentHTML}</div>
     `;
     
+    if (sender === 'ai' && !id) {
+        enhanceCodeBlocks(div);
+    }
+    
     chatContainer.appendChild(div);
     chatContainer.scrollTop = chatContainer.scrollHeight;
+    return div;
 }
 
 function renderCitations(citations) {
