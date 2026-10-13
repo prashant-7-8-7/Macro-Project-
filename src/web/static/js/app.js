@@ -59,9 +59,114 @@ function setupTheme() {
 // Initialize theme immediately to prevent flashing
 setupTheme();
 
+// Workspace Tabs Management
+function setupWorkspaceTabs() {
+    const tabBtnDoc = document.getElementById('tab-btn-document');
+    const tabBtnQuiz = document.getElementById('tab-btn-quiz');
+    const tabBtnNotes = document.getElementById('tab-btn-notes');
+    const panelDoc = document.getElementById('tab-panel-document');
+    const panelQuiz = document.getElementById('tab-panel-quiz');
+
+    if (tabBtnDoc && tabBtnQuiz && panelDoc && panelQuiz) {
+        tabBtnDoc.addEventListener('click', () => {
+            tabBtnDoc.classList.add('active');
+            tabBtnDoc.setAttribute('aria-selected', 'true');
+            tabBtnQuiz.classList.remove('active');
+            tabBtnQuiz.setAttribute('aria-selected', 'false');
+
+            panelDoc.classList.remove('hidden');
+            panelQuiz.classList.add('hidden');
+        });
+
+        tabBtnQuiz.addEventListener('click', () => {
+            tabBtnQuiz.classList.add('active');
+            tabBtnQuiz.setAttribute('aria-selected', 'true');
+            tabBtnDoc.classList.remove('active');
+            tabBtnDoc.setAttribute('aria-selected', 'false');
+
+            panelQuiz.classList.remove('hidden');
+            panelDoc.classList.add('hidden');
+        });
+    }
+
+    if (tabBtnNotes) {
+        tabBtnNotes.addEventListener('click', () => {
+            if (typeof handleMakeNotes === 'function') {
+                handleMakeNotes();
+            } else {
+                const makeNotesBtn = document.getElementById('btn-make-notes');
+                if (makeNotesBtn) makeNotesBtn.click();
+            }
+        });
+    }
+}
+
+// Collapsible Sidebar Management
+function setupSidebarToggle() {
+    const sidebar = document.querySelector('.sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle');
+
+    if (!sidebar || !toggleBtn) return;
+
+    // Restore saved state
+    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+    }
+
+    toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+    });
+}
+
+// Resizable AI Assistant Panel
+function setupPanelResizer() {
+    const resizer = document.getElementById('ai-panel-resizer');
+    const aiPanel = document.querySelector('.ai-assistant');
+
+    if (!resizer || !aiPanel) return;
+
+    // Restore saved width
+    const savedWidth = localStorage.getItem('ai_panel_width');
+    if (savedWidth && window.innerWidth > 900) {
+        aiPanel.style.width = `${Math.min(Math.max(parseInt(savedWidth), 280), 650)}px`;
+    }
+
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        resizer.classList.add('is-resizing');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth >= 280 && newWidth <= 650) {
+            aiPanel.style.width = `${newWidth}px`;
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            resizer.classList.remove('is-resizing');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            localStorage.setItem('ai_panel_width', parseInt(aiPanel.style.width));
+        }
+    });
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupTheme();
+    setupWorkspaceTabs();
+    setupSidebarToggle();
+    setupPanelResizer();
     loadDocuments();
     setupUpload();
     setupChat();
