@@ -1086,6 +1086,45 @@ mark.search-highlight.active-match {
   word-break: break-word;
 }
 
+/* Floating Scroll To Top Button */
+.btn-scroll-top {
+  position: absolute;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-full);
+  background-color: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg), 0 0 16px -2px var(--brand-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--dur-normal) var(--ease-spring);
+  z-index: var(--z-sticky);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.btn-scroll-top:hover {
+  background: var(--brand-gradient);
+  color: #ffffff;
+  border-color: transparent;
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: var(--shadow-xl), 0 0 24px var(--brand-glow);
+}
+
+.btn-scroll-top.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.85);
+}
+
+
 
 
 
