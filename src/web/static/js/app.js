@@ -400,6 +400,73 @@ function setupCommandPalette() {
     window.closeCommandPalette = closePalette;
 }
 
+// Global Keyboard Shortcuts
+function setupGlobalShortcuts() {
+    const shortcutsModal = document.getElementById('shortcuts-help-modal');
+    const shortcutsCloseBtn = document.getElementById('shortcuts-btn-close');
+
+    const openShortcuts = () => {
+        if (shortcutsModal) shortcutsModal.classList.remove('hidden');
+    };
+
+    const closeShortcuts = () => {
+        if (shortcutsModal) shortcutsModal.classList.add('hidden');
+    };
+
+    if (shortcutsCloseBtn) {
+        shortcutsCloseBtn.addEventListener('click', closeShortcuts);
+    }
+
+    if (shortcutsModal) {
+        shortcutsModal.addEventListener('click', (e) => {
+            if (e.target === shortcutsModal) closeShortcuts();
+        });
+    }
+
+    window.openShortcutsModal = openShortcuts;
+    window.closeShortcutsModal = closeShortcuts;
+
+    document.addEventListener('keydown', (e) => {
+        const isEditing = document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+
+        // Ctrl+K or Cmd+K: Command Palette
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+            e.preventDefault();
+            if (window.openCommandPalette) window.openCommandPalette();
+            return;
+        }
+
+        // Ctrl+\: Toggle Sidebar
+        if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+            e.preventDefault();
+            const sidebarBtn = document.getElementById('sidebar-toggle');
+            if (sidebarBtn) sidebarBtn.click();
+            return;
+        }
+
+        // Ctrl+D: Toggle Theme
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+            e.preventDefault();
+            const themeBtn = document.getElementById('theme-toggle');
+            if (themeBtn) themeBtn.click();
+            return;
+        }
+
+        // Escape: Close any open modal
+        if (e.key === 'Escape') {
+            if (window.closeCommandPalette) window.closeCommandPalette();
+            closeShortcuts();
+            return;
+        }
+
+        // '?' when not typing in an input: Show shortcuts modal
+        if (e.key === '?' && !isEditing && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            openShortcuts();
+        }
+    });
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupTheme();
@@ -414,6 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupChat();
     setupQuiz();
     setupCommandPalette();
+    setupGlobalShortcuts();
 });
 
 // --- API Calls ---
