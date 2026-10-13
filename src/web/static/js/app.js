@@ -947,6 +947,32 @@ function renderDocumentContent(chunks, searchQuery = '') {
         
         chunkDiv.appendChild(headerDiv);
         chunkDiv.appendChild(bodyDiv);
+
+        // Long chunk collapsible behavior
+        const isLongChunk = (chunk.content || '').length > 360 || (chunk.content || '').split('\n').length > 6;
+        if (isLongChunk) {
+            bodyDiv.classList.add('is-collapsible');
+            if (query && contentHtml.includes('<mark class="search-highlight">')) {
+                bodyDiv.classList.add('is-expanded');
+            }
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'btn-chunk-expand';
+            toggleBtn.innerHTML = bodyDiv.classList.contains('is-expanded')
+                ? '<i class="fa-solid fa-chevron-up"></i> Show less'
+                : '<i class="fa-solid fa-chevron-down"></i> Show more';
+
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const expanded = bodyDiv.classList.toggle('is-expanded');
+                toggleBtn.innerHTML = expanded
+                    ? '<i class="fa-solid fa-chevron-up"></i> Show less'
+                    : '<i class="fa-solid fa-chevron-down"></i> Show more';
+            });
+            chunkDiv.appendChild(toggleBtn);
+        }
+
         viewerContent.appendChild(chunkDiv);
     });
 
