@@ -290,6 +290,9 @@
                         <button id="btn-summarize" class="btn-primary-outline" title="Generate quick summary of document">
                             <i class="fa-solid fa-bolt"></i> Summarize
                         </button>
+                        <button id="btn-clear-chat" class="btn-icon-subtle" title="Clear chat history" aria-label="Clear chat history">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
                     </div>
                 </header>
 
@@ -306,11 +309,27 @@
                 </div>
 
                 <div class="chat-input-area">
+                    <!-- Suggested Question Chips -->
+                    <div id="suggested-questions-container" class="suggested-questions-container">
+                        <div id="suggested-chips-list" class="suggested-chips-list">
+                            <button class="suggested-chip" data-query="What are the key points in this document?">
+                                <i class="fa-regular fa-lightbulb"></i> Key points?
+                            </button>
+                            <button class="suggested-chip" data-query="Can you summarize the main findings?">
+                                <i class="fa-solid fa-bolt"></i> Main findings?
+                            </button>
+                            <button class="suggested-chip" data-query="Explain the most important concepts simply.">
+                                <i class="fa-regular fa-compass"></i> Explain simply
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="input-wrapper">
-                        <input type="text"
-                               id="chat-input"
-                               placeholder="Ask a question about this document...">
-                        <button id="btn-send" aria-label="Send question">
+                        <textarea id="chat-input"
+                                  placeholder="Ask a question about this document... (Shift+Enter for newline)"
+                                  rows="1"
+                                  autocomplete="off"></textarea>
+                        <button id="btn-send" aria-label="Send question" title="Send question">
                             <i class="fa-solid fa-paper-plane"></i>
                         </button>
                     </div>
