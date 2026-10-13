@@ -1,39 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('./tokens.css');
+@import url('./base.css');
+@import url('./animations.css');
+@import url('./layout.css');
+@import url('./components.css');
 
 :root {
-    /* Premium Color Palette */
-    --bg-main: #f5f7fa;
-    --bg-surface: rgba(255, 255, 255, 0.85);
-    --bg-surface-alt: rgba(241, 245, 249, 0.7);
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --text-tertiary: #94a3b8;
-    
-    /* Vibrant Gradients & Accents */
-    --accent: #4f46e5;
-    --accent-hover: #4338ca;
-    --accent-gradient: linear-gradient(135deg, #4f46e5 0%, #ec4899 100%);
-    --accent-light: rgba(79, 70, 229, 0.1);
-    
-    --border: rgba(226, 232, 240, 0.6);
-    --border-strong: rgba(203, 213, 225, 0.8);
-    --success: #10b981;
-    
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 20px;
-    --radius-full: 9999px;
-    
-    --shadow-sm: 0 2px 8px -2px rgba(15, 23, 42, 0.05);
-    --shadow-md: 0 12px 24px -6px rgba(15, 23, 42, 0.08), 0 4px 12px -4px rgba(15, 23, 42, 0.04);
-    --shadow-lg: 0 20px 40px -10px rgba(15, 23, 42, 0.1);
-    --shadow-accent: 0 8px 16px -4px rgba(79, 70, 229, 0.25);
-    
-    --font-main: 'Inter', sans-serif;
-    --font-heading: 'Plus Jakarta Sans', sans-serif;
-    
-    --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-spring: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* Legacy Variable Bridges mapped to new Design Tokens */
+    --bg-main: var(--bg-page);
+    --bg-surface: var(--glass-bg);
+    --bg-surface-alt: var(--bg-surface-subtle);
+    --border: var(--border-subtle);
+    --border-strong: var(--border-default);
+    --accent: var(--brand-indigo);
+    --accent-hover: var(--brand-violet);
+    --accent-gradient: var(--brand-gradient);
+    --accent-light: var(--brand-gradient-subtle);
+    --font-main: var(--font-sans);
+    --font-heading: var(--font-sans);
 }
 
 * {
