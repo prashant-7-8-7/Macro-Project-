@@ -1291,6 +1291,193 @@ function showQuizAnswer(button, index) {
     toggleExplanation(index);
 }
 
+function renderQuizResultsSummary(correctCount, total) {
+    const existingSummary = document.getElementById('quiz-results-summary-card');
+    if (existingSummary) existingSummary.remove();
+
+    const percentage = Math.round((correctCount / total) * 100);
+    const summaryCard = document.createElement('div');
+    summaryCard.className = 'quiz-results-summary glass-panel';
+    summaryCard.id = 'quiz-results-summary-card';
+
+    let messageTitle = 'Quiz Completed!';
+    let messageSubtitle = 'You answered all questions.';
+    if (percentage === 100) {
+        messageTitle = '🎉 Perfect Score!';
+        messageSubtitle = 'Mastery achieved! You nailed every single question.';
+    } else if (percentage >= 80) {
+        messageTitle = '🌟 Outstanding Job!';
+        messageSubtitle = 'Excellent comprehension of the source document.';
+    } else if (percentage >= 60) {
+        messageTitle = '👍 Good Effort!';
+        messageSubtitle = 'Solid understanding. Review the explanations below to master the rest.';
+    } else {
+        messageTitle = '📚 Keep Practicing!';
+        messageSubtitle = 'Review the source pages and try again to improve your score.';
+    }
+
+    const radius = 54;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (percentage / 100) * circumference;
+
+    summaryCard.innerHTML = `
+        <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);margin-bottom:2px;">${messageTitle}</div>
+        <p style="color:var(--text-secondary);font-size:var(--text-sm);max-width:440px;">${messageSubtitle}</p>
+        
+        <div class="score-counter-circle">
+            <svg viewBox="0 0 120 120">
+                <defs>
+                    <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#4f46e5" />
+                        <stop offset="50%" stop-color="#7c3aed" />
+                        <stop offset="100%" stop-color="#ec4899" />
+                    </linearGradient>
+                </defs>
+                <circle class="score-circle-bg" cx="60" cy="60" r="${radius}" />
+                <circle class="score-circle-fill" id="score-circle-bar" cx="60" cy="60" r="${radius}"
+                        stroke-dasharray="${circumference}"
+                        stroke-dashoffset="${circumference}" />
+            </svg>
+            <div style="position:absolute;display:flex;flex-direction:column;align-items:center;">
+                <span class="score-circle-text" id="score-counter-text">0%</span>
+                <span class="score-circle-subtext">${correctCount} of ${total} correct</span>
+            </div>
+        </div>
+
+        <div class="quiz-results-actions">
+            <button type="button" class="btn-primary" id="btn-quiz-retry" style="padding:0.6rem 1.4rem;border-radius:var(--radius-lg);font-weight:600;">
+                <i class="fa-solid fa-rotate-left"></i> Retry Quiz
+            </button>
+            <button type="button" class="btn-primary-outline" id="btn-quiz-new" style="padding:0.6rem 1.4rem;border-radius:var(--radius-lg);font-weight:600;">
+                <i class="fa-solid fa-plus"></i> New Quiz
+            </button>
+        </div>
+    `;
+
+    quizResults.appendChild(summaryCard);
+    summaryCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Animate score counter & circle
+    setTimeout(() => {
+        const circleBar = document.getElementById('score-circle-bar');
+        if (circleBar) {
+            circleBar.style.strokeDashoffset = `${offset}`;
+        }
+
+        const counterText = document.getElementById('score-counter-text');
+        if (counterText) {
+            let start = 0;
+            const duration = 1200;
+            const startTime = performance.now();
+
+            function updateCounter(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const currentVal = Math.round(progress * percentage);
+                counterText.textContent = `${currentVal}%`;
+                if (progress < 1) {
+                    requestAnimationFrame(updateCounter);
+                }
+            }
+            requestAnimationFrame(updateCounter);
+        }
+    }, 150);
+
+    // Confetti burst for high scores
+    if (percentage >= 70) {
+        triggerConfettiBurst();
+    }
+
+    // Button event listeners
+    const retryBtn = summaryCard.querySelector('#btn-quiz-retry');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+            window.quizUserAnswers = {};
+            renderQuiz(window.currentQuizQuestions);
+        });
+    }
+
+    const newBtn = summaryCard.querySelector('#btn-quiz-new');
+    if (newBtn) {
+        newBtn.addEventListener('click', () => {
+            const controls = document.querySelector('.quiz-controls');
+            if (controls) {
+                controls.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            if (btnGenerateQuiz) btnGenerateQuiz.focus();
+        });
+    }
+}
+
+// Lightweight vanilla canvas confetti burst
+function triggerConfettiBurst() {
+    const canvas = document.createElement('canvas');
+    canvas.style.position = 'fixed';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100vw';
+    canvas.style.height = '100vh';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '9999';
+    document.body.appendChild(canvas);
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const ctx = canvas.getContext('2d');
+
+    const colors = ['#4f46e5', '#7c3aed', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'];
+    const particles = [];
+
+    for (let i = 0; i < 90; i++) {
+        particles.push({
+            x: canvas.width / 2 + (Math.random() * 200 - 100),
+            y: canvas.height * 0.4 + (Math.random() * 100 - 50),
+            vx: (Math.random() - 0.5) * 14,
+            vy: (Math.random() - 0.8) * 16,
+            size: Math.random() * 8 + 4,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            rotation: Math.random() * 360,
+            rotationSpeed: (Math.random() - 0.5) * 12,
+            alpha: 1
+        });
+    }
+
+    let animationFrame;
+    const startTime = performance.now();
+
+    function render(time) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let alive = false;
+
+        particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.35;
+            p.rotation += p.rotationSpeed;
+            p.alpha -= 0.012;
+
+            if (p.alpha > 0) {
+                alive = true;
+                ctx.save();
+                ctx.globalAlpha = Math.max(p.alpha, 0);
+                ctx.translate(p.x, p.y);
+                ctx.rotate((p.rotation * Math.PI) / 180);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+                ctx.restore();
+            }
+        });
+
+        if (alive && time - startTime < 3500) {
+            animationFrame = requestAnimationFrame(render);
+        } else {
+            cancelAnimationFrame(animationFrame);
+            canvas.remove();
+        }
+    }
+
+    requestAnimationFrame(render);
+}
 
 // Prevent HTML injection when displaying generated content
 function escapeHTML(value) {
