@@ -36,6 +36,9 @@
                         <i class="fa-solid fa-moon icon-moon"></i>
                         <i class="fa-solid fa-sun icon-sun"></i>
                     </button>
+                    <button id="sidebar-toggle" class="theme-toggle-btn" title="Collapse / Expand Sidebar" aria-label="Toggle sidebar">
+                        <i class="fa-solid fa-bars-staggered"></i>
+                    </button>
                 </div>
             </div>
 
@@ -99,125 +102,56 @@
 
             <div id="document-workspace" class="document-workspace hidden">
 
-                <!-- Document Viewer -->
-
-                <section class="document-viewer">
-
+                <!-- Center Column: Document & Quiz Tabs Workspace -->
+                <div class="workspace-center-column">
                     <header class="viewer-header">
-
-                        <h2 id="viewer-title">Document Title</h2>
-
-                        <div class="viewer-meta" id="viewer-meta">PDF • 2 pages</div>
-
+                        <div class="viewer-header-top">
+                            <div class="viewer-title-group">
+                                <h2 id="viewer-title">Document Title</h2>
+                                <div class="viewer-meta" id="viewer-meta">PDF • 2 pages</div>
+                            </div>
+                            <!-- Workspace Navigation Tabs -->
+                            <nav class="workspace-tabs" role="tablist" aria-label="Workspace Views">
+                                <button id="tab-btn-document" class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-panel-document">
+                                    <i class="fa-regular fa-file-lines"></i>
+                                    <span>Document</span>
+                                </button>
+                                <button id="tab-btn-quiz" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-panel-quiz">
+                                    <i class="fa-solid fa-graduation-cap"></i>
+                                    <span>Quiz Maker</span>
+                                </button>
+                                <button id="tab-btn-notes" class="tab-btn" role="tab" aria-selected="false">
+                                    <i class="fa-solid fa-pen-nib"></i>
+                                    <span>Study Notes</span>
+                                </button>
+                            </nav>
+                        </div>
                     </header>
 
-                    <div class="viewer-content" id="viewer-content">
-
-                        <div class="skeleton-loader">
-
-                            <div class="line"></div>
-
-                            <div class="line"></div>
-
-                            <div class="line"></div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                <!-- AI Assistant -->
-
-                <section class="ai-assistant">
-
-                    <header class="assistant-header">
-
-                        <h3><i class="fa-solid fa-sparkles"></i> AI Assistant</h3>
-
-                        <div style="display:flex;gap:8px;">
-
-                            <button id="btn-make-notes" class="btn-primary-outline">
-                                <i class="fa-solid fa-pen-nib"></i> Make Notes
-                            </button>
-
-                            <button id="btn-summarize" class="btn-primary-outline">
-                                <i class="fa-solid fa-bolt"></i> Summarize
-                            </button>
-
-                        </div>
-
-                    </header>
-
-                    <div class="chat-container" id="chat-container">
-
-                        <div class="chat-message ai-message">
-
-                            <div class="avatar">
-
-                                <i class="fa-solid fa-robot"></i>
-
+                    <!-- Tab Panel 1: Document Chunks Viewer -->
+                    <section id="tab-panel-document" class="tab-panel active document-viewer">
+                        <div class="viewer-content" id="viewer-content">
+                            <div class="skeleton-loader">
+                                <div class="line"></div>
+                                <div class="line"></div>
+                                <div class="line"></div>
                             </div>
+                        </div>
+                    </section>
 
-                            <div class="message-content">
-
-                                Hello! I'm ready to answer any questions about this document.
-
+                    <!-- Tab Panel 2: Quiz Maker -->
+                    <section id="tab-panel-quiz" class="tab-panel quiz-maker hidden">
+                        <header class="quiz-header">
+                            <div>
+                                <h3>
+                                    <i class="fa-solid fa-graduation-cap"></i>
+                                    Quiz Maker
+                                </h3>
+                                <p>
+                                    Generate a source-grounded quiz from this document.
+                                </p>
                             </div>
-
-                        </div>
-
-                        <!-- Chat messages injected here -->
-
-                    </div>
-
-                    <div class="chat-input-area">
-
-                        <div class="input-wrapper">
-
-                            <input type="text"
-
-                                   id="chat-input"
-
-                                   placeholder="Ask a question about this document...">
-
-                            <button id="btn-send">
-
-                                <i class="fa-solid fa-paper-plane"></i>
-
-                            </button>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                <!-- ========================= -->
-
-                <!-- QUIZ MAKER -->
-
-                <!-- ========================= -->
-
-                <section class="quiz-maker">
-
-                    <header class="quiz-header">
-
-                        <div>
-
-                            <h3>
-
-                                <i class="fa-solid fa-graduation-cap"></i>
-
-                                Quiz Maker
-
-                            </h3>
-
-                            <p>
-
-                                Generate a source-grounded quiz from this document.
+                        </header>
 
                             </p>
 
@@ -295,16 +229,58 @@
                     <div id="quiz-results" class="quiz-results hidden">
 
                         <!-- Questions inserted by JavaScript -->
-
                     </div>
-
                 </section>
+            </div> <!-- /workspace-center-column -->
 
+            <!-- Drag Handle for Resizing AI Panel -->
+            <div id="ai-panel-resizer" class="panel-resizer" title="Drag to resize AI Assistant" aria-label="Resize AI Assistant Panel" role="separator" aria-orientation="vertical">
+                <div class="resizer-handle-pill"></div>
             </div>
 
-        </main>
+            <!-- AI Assistant Panel -->
+            <section class="ai-assistant">
+                <header class="assistant-header">
+                    <div class="assistant-title-group">
+                        <h3><i class="fa-solid fa-sparkles"></i> AI Assistant</h3>
+                        <span class="ai-status-indicator" title="Connected to Google Gemini AI">Online</span>
+                    </div>
+                    <div class="assistant-actions">
+                        <button id="btn-make-notes" class="btn-primary-outline" title="Generate handwritten study notes">
+                            <i class="fa-solid fa-pen-nib"></i> Make Notes
+                        </button>
+                        <button id="btn-summarize" class="btn-primary-outline" title="Generate quick summary of document">
+                            <i class="fa-solid fa-bolt"></i> Summarize
+                        </button>
+                    </div>
+                </header>
 
-    </div>
+                <div class="chat-container" id="chat-container">
+                    <div class="chat-message ai-message">
+                        <div class="avatar">
+                            <i class="fa-solid fa-robot"></i>
+                        </div>
+                        <div class="message-content">
+                            Hello! I'm ready to answer any questions about this document.
+                        </div>
+                    </div>
+                    <!-- Chat messages injected here -->
+                </div>
+
+                <div class="chat-input-area">
+                    <div class="input-wrapper">
+                        <input type="text"
+                               id="chat-input"
+                               placeholder="Ask a question about this document...">
+                        <button id="btn-send" aria-label="Send question">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div> <!-- /document-workspace -->
+    </main>
+</div> <!-- /app-container -->
 
 
     <!-- Template for Source Citations -->
