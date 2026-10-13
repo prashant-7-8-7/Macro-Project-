@@ -629,6 +629,18 @@ function setupLibrarySearch() {
 
     if (!searchInput) return;
 
+    const handleLibrarySearch = debounce((query) => {
+        if (!query) {
+            renderDocumentsList(window.allDocuments);
+            return;
+        }
+
+        const filtered = window.allDocuments.filter(doc => 
+            (doc.filename || '').toLowerCase().includes(query)
+        );
+        renderDocumentsList(filtered);
+    }, 120);
+
     searchInput.addEventListener('input', () => {
         const query = searchInput.value.trim().toLowerCase();
         
@@ -640,15 +652,7 @@ function setupLibrarySearch() {
             }
         }
 
-        if (!query) {
-            renderDocumentsList(window.allDocuments);
-            return;
-        }
-
-        const filtered = window.allDocuments.filter(doc => 
-            (doc.filename || '').toLowerCase().includes(query)
-        );
-        renderDocumentsList(filtered);
+        handleLibrarySearch(query);
     });
 
     if (searchClear) {
@@ -668,6 +672,10 @@ function setupDocSearch() {
 
     if (!searchInput) return;
 
+    const handleDocSearch = debounce((query) => {
+        renderDocumentContent(window.currentDocChunks, query);
+    }, 150);
+
     searchInput.addEventListener('input', () => {
         const query = searchInput.value.trim();
         if (searchClear) {
@@ -677,7 +685,7 @@ function setupDocSearch() {
                 searchClear.classList.add('hidden');
             }
         }
-        renderDocumentContent(window.currentDocChunks, query);
+        handleDocSearch(query);
     });
 
     if (searchClear) {
@@ -712,30 +720,37 @@ function setupDocumentViewer() {
         });
     }
 
-    // Scroll progress & Scroll-to-top handler
+    // Smooth, 60fps rAF-throttled scroll progress & Scroll-to-top handler
     if (viewerContent) {
+        let isTicking = false;
         viewerContent.addEventListener('scroll', () => {
-            const scrollTop = viewerContent.scrollTop;
-            const scrollHeight = viewerContent.scrollHeight - viewerContent.clientHeight;
-            
-            if (scrollHeight > 0) {
-                const progress = Math.min(Math.max((scrollTop / scrollHeight) * 100, 0), 100);
-                if (progressBar) {
-                    progressBar.style.width = `${progress}%`;
-                }
-            } else if (progressBar) {
-                progressBar.style.width = '0%';
-            }
+            if (!isTicking) {
+                window.requestAnimationFrame(() => {
+                    const scrollTop = viewerContent.scrollTop;
+                    const scrollHeight = viewerContent.scrollHeight - viewerContent.clientHeight;
+                    
+                    if (scrollHeight > 0) {
+                        const progress = Math.min(Math.max((scrollTop / scrollHeight) * 100, 0), 100);
+                        if (progressBar) {
+                            progressBar.style.width = `${progress}%`;
+                        }
+                    } else if (progressBar) {
+                        progressBar.style.width = '0%';
+                    }
 
-            // Scroll-to-top button visibility
-            if (scrollTopBtn) {
-                if (scrollTop > 180) {
-                    scrollTopBtn.classList.remove('hidden');
-                } else {
-                    scrollTopBtn.classList.add('hidden');
-                }
+                    // Scroll-to-top button visibility
+                    if (scrollTopBtn) {
+                        if (scrollTop > 180) {
+                            scrollTopBtn.classList.remove('hidden');
+                        } else {
+                            scrollTopBtn.classList.add('hidden');
+                        }
+                    }
+                    isTicking = false;
+                });
+                isTicking = true;
             }
-        });
+        }, { passive: true });
     }
 
     // Scroll-to-top button click
@@ -1796,4 +1811,13 @@ function escapeHTML(value) {
     const div = document.createElement('div');
     div.textContent = value ?? '';
     return div.innerHTML;
+}
+
+// Lightweight debounce utility for high-frequency input and search handlers
+function debounce(fn, delay = 150) {
+    let timer = null;
+    return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
 }
