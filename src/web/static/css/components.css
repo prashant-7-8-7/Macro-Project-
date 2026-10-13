@@ -972,5 +972,120 @@ mark.search-highlight.active-match {
   box-shadow: 0 0 8px rgba(168, 85, 247, 0.5);
 }
 
+/* ============================================================
+   MODERN CHUNK CARDS & ACTION BUTTONS
+   ============================================================ */
+.viewer-chunk {
+  background-color: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--dur-normal) var(--ease-spring);
+  position: relative;
+  overflow: hidden;
+}
+
+.viewer-chunk::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: var(--brand-gradient);
+  opacity: 0;
+  transition: opacity var(--dur-normal) var(--ease-standard);
+}
+
+.viewer-chunk:hover {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow-md), 0 0 20px -4px var(--brand-glow);
+  transform: translateY(-2px);
+}
+
+.viewer-chunk:hover::before {
+  opacity: 1;
+}
+
+.viewer-chunk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3-5);
+  padding-bottom: var(--space-2-5);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.viewer-page-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.viewer-page-marker .marker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-gradient);
+  box-shadow: 0 0 6px var(--brand-glow);
+}
+
+.chunk-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+}
+
+.btn-chunk-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-standard);
+}
+
+.btn-chunk-action:hover {
+  background-color: var(--bg-surface-elevated);
+  border-color: var(--border-subtle);
+  color: var(--brand-indigo);
+  transform: translateY(-1px);
+}
+
+.btn-chunk-action.copied {
+  color: var(--success);
+  border-color: var(--success);
+  background-color: var(--success-subtle);
+}
+
+.viewer-chunk-body {
+  font-size: var(--text-sm);
+  line-height: 1.75;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+
 
 
