@@ -57,25 +57,34 @@
                 </div>
 
                 <div class="upload-progress hidden" id="upload-progress">
-
-                    <div class="spinner"></div>
-
-                    <p>Processing...</p>
-
+                    <div class="upload-progress-header">
+                        <div class="spinner"></div>
+                        <span id="upload-progress-text">Processing document...</span>
+                        <span id="upload-progress-percent">0%</span>
+                    </div>
+                    <div class="upload-progress-bar-track">
+                        <div class="upload-progress-bar-fill" id="upload-progress-bar"></div>
+                    </div>
                 </div>
-
             </div>
 
             <div class="documents-section">
-
-                <h3>Library</h3>
-
+                <div class="documents-section-header">
+                    <h3>Library</h3>
+                    <span class="documents-count-badge" id="documents-count">0</span>
+                </div>
+                <div class="library-search-wrapper">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="library-search-input" placeholder="Search documents..." autocomplete="off">
+                    <button id="library-search-clear" class="btn-clear hidden" aria-label="Clear search"><i class="fa-solid fa-xmark"></i></button>
+                </div>
                 <ul id="documents-list" class="doc-list">
-
                     <!-- Documents populated here -->
-
                 </ul>
-
+                <div id="library-empty-state" class="library-empty hidden">
+                    <i class="fa-regular fa-folder-open"></i>
+                    <p>No documents found</p>
+                </div>
             </div>
 
         </aside>
