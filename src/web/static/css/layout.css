@@ -265,8 +265,8 @@
   box-shadow: var(--shadow-xs);
 }
 
-[data-theme="dark"] .tab-btn.active {
-  color: #c4b5fd;
+html[data-theme="dark"] .tab-btn.active {
+  color: var(--accent);
 }
 
 /* Tab Panels */
