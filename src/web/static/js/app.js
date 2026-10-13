@@ -265,6 +265,12 @@ async function openDocument(docId, filename, sizeKB) {
     // Toggle UI States
     emptyState.classList.add('hidden');
     documentWorkspace.classList.remove('hidden');
+
+    // Auto-activate Document tab if previously on Quiz tab
+    const tabBtnDoc = document.getElementById('tab-btn-document');
+    if (tabBtnDoc && !tabBtnDoc.classList.contains('active')) {
+        tabBtnDoc.click();
+    }
     
     // Set Header
     viewerTitle.textContent = filename;
