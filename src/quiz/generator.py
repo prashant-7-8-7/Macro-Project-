@@ -98,6 +98,13 @@ DOCUMENT CONTENT:
 {context_block}
 """
 
+    logger.info(
+        "[Quiz Generator] a) Contexts sent to LLM: %d chunks, %d context chars. Prompt total length: %d chars.",
+        len(selected_contexts),
+        len(context_block),
+        len(prompt),
+    )
+
     try:
         raw_text = call_llm(
             prompt,
@@ -108,6 +115,10 @@ DOCUMENT CONTENT:
             raise RuntimeError("All AI models are currently unavailable.")
 
         raw_text = raw_text.strip()
+        logger.info(
+            "[Quiz Generator] Raw LLM response received: %d chars.",
+            len(raw_text),
+        )
 
         # Robust JSON extraction: Find the first '[' and last ']'
         start_idx = raw_text.find('[')
@@ -122,6 +133,11 @@ DOCUMENT CONTENT:
 
         if not isinstance(data, list):
             raise ValueError("AI response is not a JSON list.")
+
+        logger.info(
+            "[Quiz Generator] b) Raw questions returned in JSON list: %d",
+            len(data),
+        )
 
         questions = []
 
@@ -145,6 +161,11 @@ DOCUMENT CONTENT:
                     "Skipping malformed generated question: %s",
                     exc,
                 )
+
+        logger.info(
+            "[Quiz Generator] c) Questions surviving Pydantic QuizQuestion schema: %d",
+            len(questions),
+        )
 
         return questions
 

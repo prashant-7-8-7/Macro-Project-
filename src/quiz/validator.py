@@ -1,6 +1,9 @@
+import logging
 from typing import List, Dict, Tuple
 
 from src.quiz.schemas import QuizQuestion
+
+logger = logging.getLogger(__name__)
 
 
 def validate_question(
@@ -81,7 +84,7 @@ def validate_questions(
 
     seen_questions = set()
 
-    for question in questions:
+    for idx, question in enumerate(questions):
 
         normalized = " ".join(
             question.question.lower().split()
@@ -95,6 +98,11 @@ def validate_questions(
                 "Duplicate question detected."
             ]
             rejected.append(question)
+            logger.info(
+                "[Quiz Validator] Rejected Q%d ('%s...'): Duplicate question detected.",
+                idx + 1,
+                question.question[:40],
+            )
             continue
 
         seen_questions.add(normalized)
@@ -106,7 +114,26 @@ def validate_questions(
 
         if validated.status == "verified":
             verified.append(validated)
+            logger.info(
+                "[Quiz Validator] Verified Q%d: '%s...'",
+                idx + 1,
+                validated.question[:40],
+            )
         else:
             rejected.append(validated)
+            logger.info(
+                "[Quiz Validator] d) Rejected Q%d ('%s...'): %s (raw source_chunk_id: %s)",
+                idx + 1,
+                validated.question[:40],
+                validated.validation_reasons,
+                validated.source_chunk_id,
+            )
+
+    logger.info(
+        "[Quiz Validator] Summary: %d verified, %d rejected out of %d candidates.",
+        len(verified),
+        len(rejected),
+        len(questions),
+    )
 
     return verified, rejected

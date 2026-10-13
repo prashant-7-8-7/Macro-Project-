@@ -253,6 +253,14 @@ async def generate_quiz(
                 detail="Document not found or contains no text."
             )
 
+        logger.info(
+            "[Quiz Route] Incoming quiz request: doc_id=%s, requested=%d, difficulty=%s, total_doc_chunks=%d",
+            request.document_id,
+            request.num_questions,
+            request.difficulty,
+            len(contexts),
+        )
+
         # Generate candidate questions
         questions = generate_questions(
             contexts=contexts,
@@ -264,6 +272,15 @@ async def generate_quiz(
         verified, rejected = validate_questions(
             questions,
             contexts,
+        )
+
+        logger.info(
+            "[Quiz Route] Result for doc_id=%s: requested=%d, generated=%d, verified=%d, rejected=%d",
+            request.document_id,
+            request.num_questions,
+            len(questions),
+            len(verified),
+            len(rejected),
         )
 
         return QuizResponse(
