@@ -667,6 +667,23 @@ function setupChat() {
             btnSummarize.innerHTML = '<i class="fa-solid fa-bolt"></i> Summarize';
         }
     });
+
+    const btnClearChat = document.getElementById('btn-clear-chat');
+    if (btnClearChat) {
+        btnClearChat.addEventListener('click', () => {
+            if (confirm('Clear all chat messages for this document?')) {
+                const filename = window.activeDocumentFilename || 'this document';
+                chatContainer.innerHTML = `
+                    <div class="chat-message ai-message">
+                        <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                        <div class="message-content">
+                            Hello! I'm ready to answer any questions about <strong>${filename}</strong>.
+                        </div>
+                    </div>
+                `;
+            }
+        });
+    }
 }
 
 async function handleSendChat() {
@@ -748,6 +765,53 @@ function enhanceCodeBlocks(container) {
     });
 }
 
+function attachAiMessageActions(messageDiv) {
+    const content = messageDiv.querySelector('.message-content');
+    if (!content) return;
+    
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'message-actions';
+    
+    // Copy response button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn-message-action';
+    copyBtn.title = 'Copy response text';
+    copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+    copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const clone = content.cloneNode(true);
+        const actionEl = clone.querySelector('.message-actions');
+        if (actionEl) actionEl.remove();
+        navigator.clipboard.writeText(clone.innerText.trim()).then(() => {
+            copyBtn.classList.add('copied');
+            copyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+            setTimeout(() => {
+                copyBtn.classList.remove('copied');
+                copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+            }, 2000);
+        });
+    });
+    
+    // Regenerate response button
+    const regenBtn = document.createElement('button');
+    regenBtn.className = 'btn-message-action';
+    regenBtn.title = 'Regenerate response';
+    regenBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Regenerate';
+    regenBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.lastUserQuestion && activeDocumentId) {
+            chatInput.value = window.lastUserQuestion;
+            handleSendChat();
+        }
+    });
+    
+    actionsDiv.appendChild(copyBtn);
+    if (window.lastUserQuestion) {
+        actionsDiv.appendChild(regenBtn);
+    }
+    content.appendChild(actionsDiv);
+}
+
 function appendMessage(sender, contentHTML, id = null) {
     const div = document.createElement('div');
     div.className = `chat-message ${sender}-message`;
@@ -762,6 +826,7 @@ function appendMessage(sender, contentHTML, id = null) {
     
     if (sender === 'ai' && !id) {
         enhanceCodeBlocks(div);
+        attachAiMessageActions(div);
     }
     
     chatContainer.appendChild(div);
