@@ -186,89 +186,63 @@
                                     Quiz Maker
                                 </h3>
                                 <p>
-                                    Generate a source-grounded quiz from this document.
+                                    Generate an interactive, source-grounded quiz from this document.
                                 </p>
                             </div>
                         </header>
 
-                            </p>
+                        <div class="quiz-controls glass-panel">
+                            <div class="quiz-control">
+                                <label for="quiz-question-count">
+                                    <i class="fa-solid fa-list-ol"></i> Questions
+                                </label>
+                                <div class="segmented-control" id="quiz-count-segments">
+                                    <button type="button" class="segment-btn" data-value="5">5</button>
+                                    <button type="button" class="segment-btn active" data-value="10">10</button>
+                                    <button type="button" class="segment-btn" data-value="15">15</button>
+                                    <button type="button" class="segment-btn" data-value="20">20</button>
+                                </div>
+                                <select id="quiz-question-count" class="visually-hidden">
+                                    <option value="5">5</option>
+                                    <option value="10" selected>10</option>
+                                    <option value="15">15</option>
+                                    <option value="20">20</option>
+                                </select>
+                            </div>
 
+                            <div class="quiz-control">
+                                <label for="quiz-difficulty">
+                                    <i class="fa-solid fa-sliders"></i> Difficulty
+                                </label>
+                                <div class="segmented-control" id="quiz-difficulty-segments">
+                                    <button type="button" class="segment-btn active" data-value="mixed">Mixed</button>
+                                    <button type="button" class="segment-btn" data-value="easy">Easy</button>
+                                    <button type="button" class="segment-btn" data-value="medium">Medium</button>
+                                    <button type="button" class="segment-btn" data-value="hard">Hard</button>
+                                </div>
+                                <select id="quiz-difficulty" class="visually-hidden">
+                                    <option value="mixed" selected>Mixed</option>
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+
+                            <button id="btn-generate-quiz" class="btn-generate-quiz btn-primary">
+                                <span class="btn-shine"></span>
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>Generate Quiz</span>
+                            </button>
                         </div>
 
-                    </header>
+                        <!-- Quiz generation status -->
+                        <div id="quiz-status" class="quiz-status hidden"></div>
 
-
-                    <div class="quiz-controls">
-
-                        <div class="quiz-control">
-
-                            <label for="quiz-question-count">
-
-                                Questions
-
-                            </label>
-
-                            <select id="quiz-question-count">
-
-                                <option value="5">5</option>
-
-                                <option value="10" selected>10</option>
-
-                                <option value="15">15</option>
-
-                                <option value="20">20</option>
-
-                            </select>
-
+                        <!-- Generated questions -->
+                        <div id="quiz-results" class="quiz-results hidden">
+                            <!-- Questions inserted by JavaScript -->
                         </div>
-
-
-                        <div class="quiz-control">
-
-                            <label for="quiz-difficulty">
-
-                                Difficulty
-
-                            </label>
-
-                            <select id="quiz-difficulty">
-
-                                <option value="mixed" selected>Mixed</option>
-
-                                <option value="easy">Easy</option>
-
-                                <option value="medium">Medium</option>
-
-                                <option value="hard">Hard</option>
-
-                            </select>
-
-                        </div>
-
-
-                        <button id="btn-generate-quiz" class="btn-primary">
-
-                            <i class="fa-solid fa-wand-magic-sparkles"></i>
-
-                            Generate Quiz
-
-                        </button>
-
-                    </div>
-
-
-                    <!-- Quiz generation status -->
-
-                    <div id="quiz-status" class="quiz-status hidden"></div>
-
-
-                    <!-- Generated questions -->
-
-                    <div id="quiz-results" class="quiz-results hidden">
-
-                        <!-- Questions inserted by JavaScript -->
-                    </div>
-                </section>
+                    </section>
             </div> <!-- /workspace-center-column -->
 
             <!-- Drag Handle for Resizing AI Panel -->
