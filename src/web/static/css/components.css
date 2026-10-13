@@ -1563,6 +1563,55 @@ mark.search-highlight.active-match {
 /* ============================================================
    ASSISTANT ACTION BUTTONS & CHAT INPUT CONTROLS
    ============================================================ */
+.assistant-title-group {
+  display: flex;
+  align-items: center;
+}
+
+.assistant-title-group h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.assistant-title-group h3 i {
+  color: var(--brand-indigo);
+  font-size: 14px;
+}
+
+[data-theme="dark"] .assistant-title-group h3 i {
+  color: var(--accent);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot.online {
+  background-color: var(--success);
+  box-shadow: 0 0 8px var(--success);
+  animation: pulseStatus 2.5s infinite ease-in-out;
+}
+
+@keyframes pulseStatus {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.75;
+  }
+}
+
 .assistant-actions {
   display: flex;
   align-items: center;
@@ -1589,7 +1638,7 @@ mark.search-highlight.active-match {
 
 .assistant-actions .btn-primary-outline:hover {
   background: var(--brand-gradient);
-  color: #ffffff;
+  color: var(--text-on-accent);
   border-color: transparent;
   box-shadow: 0 0 16px -2px var(--brand-glow);
   transform: translateY(-1px);
