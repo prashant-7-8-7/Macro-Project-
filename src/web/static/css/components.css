@@ -1504,6 +1504,145 @@ mark.search-highlight.active-match {
   transform: translateY(-1px);
 }
 
+/* ============================================================
+   ASSISTANT ACTION BUTTONS & CHAT INPUT CONTROLS
+   ============================================================ */
+.assistant-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.assistant-actions .btn-primary-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--dur-normal) var(--ease-spring);
+  position: relative;
+  overflow: hidden;
+}
+
+.assistant-actions .btn-primary-outline:hover {
+  background: var(--brand-gradient);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 0 16px -2px var(--brand-glow);
+  transform: translateY(-1px);
+}
+
+.assistant-actions .btn-primary-outline.is-loading {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.assistant-actions .btn-primary-outline.is-loading i {
+  animation: spin 1s linear infinite;
+}
+
+/* Chat Input Area & Auto-growing Textarea */
+.chat-input-area {
+  background-color: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+}
+
+.chat-input-area .input-wrapper {
+  margin: 0 var(--space-4);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 6px 10px;
+  transition: all var(--dur-fast) var(--ease-standard);
+}
+
+.chat-input-area .input-wrapper:focus-within {
+  border-color: var(--brand-indigo);
+  background-color: var(--bg-surface);
+  box-shadow: 0 0 0 2px var(--brand-glow);
+}
+
+#chat-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  resize: none;
+  max-height: 120px;
+  min-height: 24px;
+  line-height: 1.5;
+  padding: 4px 2px;
+}
+
+#chat-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Send Button with Ripple Effect */
+#btn-send {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--brand-gradient);
+  border: none;
+  color: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--dur-fast) var(--ease-standard);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+
+#btn-send:hover {
+  transform: translateY(-1px) scale(1.05);
+  box-shadow: 0 0 14px var(--brand-glow);
+}
+
+#btn-send:active::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  animation: rippleSend 0.4s ease-out;
+}
+
+@keyframes rippleSend {
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+
 
 
 
