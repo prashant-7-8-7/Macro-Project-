@@ -27,8 +27,41 @@ const quizDifficulty = document.getElementById('quiz-difficulty');
 const btnGenerateQuiz = document.getElementById('btn-generate-quiz');
 const quizStatus = document.getElementById('quiz-status');
 const quizResults = document.getElementById('quiz-results');
+
+// Theme Management
+function setupTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+    
+    document.documentElement.setAttribute('data-theme', initialTheme);
+
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', nextTheme);
+            localStorage.setItem('theme', nextTheme);
+        });
+    }
+
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('theme')) {
+                const autoTheme = e.matches ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', autoTheme);
+            }
+        });
+    }
+}
+
+// Initialize theme immediately to prevent flashing
+setupTheme();
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    setupTheme();
     loadDocuments();
     setupUpload();
     setupChat();
