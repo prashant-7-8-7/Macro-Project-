@@ -200,6 +200,206 @@ function setupPanelResizer() {
     });
 }
 
+// Command Palette (Ctrl+K)
+function setupCommandPalette() {
+    const modal = document.getElementById('command-palette-modal');
+    const input = document.getElementById('palette-search-input');
+    const resultsList = document.getElementById('palette-results-list');
+    const triggerBtn = document.getElementById('btn-cmd-palette-trigger');
+
+    if (!modal || !input || !resultsList) return;
+
+    let selectedIndex = 0;
+    let currentItems = [];
+
+    const getAvailableCommands = () => [
+        {
+            type: 'action',
+            title: 'Toggle Theme (Dark / Light)',
+            icon: 'fa-circle-half-stroke',
+            hotkey: 'Ctrl+D',
+            run: () => {
+                const themeBtn = document.getElementById('theme-toggle');
+                if (themeBtn) themeBtn.click();
+            }
+        },
+        {
+            type: 'action',
+            title: 'Toggle Left Sidebar',
+            icon: 'fa-bars-staggered',
+            hotkey: 'Ctrl+\\',
+            run: () => {
+                const sidebarBtn = document.getElementById('sidebar-toggle');
+                if (sidebarBtn) sidebarBtn.click();
+            }
+        },
+        {
+            type: 'action',
+            title: 'Switch to Quiz Maker',
+            icon: 'fa-graduation-cap',
+            hotkey: '',
+            run: () => {
+                const tabQuiz = document.getElementById('tab-btn-quiz');
+                if (tabQuiz) tabQuiz.click();
+            }
+        },
+        {
+            type: 'action',
+            title: 'Summarize Document',
+            icon: 'fa-bolt',
+            hotkey: '',
+            run: () => {
+                if (btnSummarize) btnSummarize.click();
+            }
+        },
+        {
+            type: 'action',
+            title: 'Make Study Notes',
+            icon: 'fa-pen-nib',
+            hotkey: '',
+            run: () => {
+                const btnNotes = document.getElementById('btn-make-notes');
+                if (btnNotes) btnNotes.click();
+            }
+        },
+        {
+            type: 'action',
+            title: 'Clear Chat History',
+            icon: 'fa-trash-can',
+            hotkey: '',
+            run: () => {
+                const btnClear = document.getElementById('btn-clear-chat');
+                if (btnClear) btnClear.click();
+            }
+        },
+        {
+            type: 'action',
+            title: 'Upload Document',
+            icon: 'fa-cloud-arrow-up',
+            hotkey: '',
+            run: () => {
+                if (fileInput) fileInput.click();
+            }
+        }
+    ];
+
+    const openPalette = () => {
+        modal.classList.remove('hidden');
+        input.value = '';
+        selectedIndex = 0;
+        renderPaletteResults('');
+        input.focus();
+    };
+
+    const closePalette = () => {
+        modal.classList.add('hidden');
+    };
+
+    const renderPaletteResults = (query) => {
+        const q = (query || '').toLowerCase().trim();
+        resultsList.innerHTML = '';
+        currentItems = [];
+
+        // Actions
+        const actions = getAvailableCommands().filter(cmd =>
+            !q || cmd.title.toLowerCase().includes(q)
+        );
+
+        // Documents
+        const docs = (window.allDocuments || []).filter(doc =>
+            !q || (doc.filename || '').toLowerCase().includes(q)
+        ).map(doc => ({
+            type: 'document',
+            title: doc.filename,
+            icon: 'fa-file-lines',
+            hotkey: `${(doc.file_size / 1024).toFixed(1)} KB`,
+            run: () => {
+                openDocument(doc.id, doc.filename, (doc.file_size / 1024).toFixed(1));
+            }
+        }));
+
+        currentItems = [...actions, ...docs];
+
+        if (currentItems.length === 0) {
+            resultsList.innerHTML = `
+                <div style="padding:var(--space-4);text-align:center;color:var(--text-muted);font-size:var(--text-xs);">
+                    No matching commands or documents found
+                </div>
+            `;
+            return;
+        }
+
+        currentItems.forEach((item, index) => {
+            const itemEl = document.createElement('div');
+            itemEl.className = `palette-item ${index === selectedIndex ? 'active' : ''}`;
+            itemEl.innerHTML = `
+                <div class="palette-item-left">
+                    <div class="palette-item-icon"><i class="fa-solid ${item.icon}"></i></div>
+                    <span class="palette-item-title">${escapeHTML(item.title)}</span>
+                </div>
+                ${item.hotkey ? `<kbd class="kbd-badge">${escapeHTML(item.hotkey)}</kbd>` : ''}
+            `;
+
+            itemEl.addEventListener('click', () => {
+                closePalette();
+                item.run();
+            });
+
+            resultsList.appendChild(itemEl);
+        });
+    };
+
+    input.addEventListener('input', () => {
+        selectedIndex = 0;
+        renderPaletteResults(input.value);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (currentItems.length > 0) {
+                selectedIndex = (selectedIndex + 1) % currentItems.length;
+                updateActiveSelection();
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (currentItems.length > 0) {
+                selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length;
+                updateActiveSelection();
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentItems[selectedIndex]) {
+                closePalette();
+                currentItems[selectedIndex].run();
+            }
+        } else if (e.key === 'Escape') {
+            closePalette();
+        }
+    });
+
+    const updateActiveSelection = () => {
+        const items = resultsList.querySelectorAll('.palette-item');
+        items.forEach((el, idx) => {
+            el.classList.toggle('active', idx === selectedIndex);
+            if (idx === selectedIndex) {
+                el.scrollIntoView({ block: 'nearest' });
+            }
+        });
+    };
+
+    if (triggerBtn) {
+        triggerBtn.addEventListener('click', openPalette);
+    }
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closePalette();
+    });
+
+    window.openCommandPalette = openPalette;
+    window.closeCommandPalette = closePalette;
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupTheme();
@@ -213,6 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupUpload();
     setupChat();
     setupQuiz();
+    setupCommandPalette();
 });
 
 // --- API Calls ---
