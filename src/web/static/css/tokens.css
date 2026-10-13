@@ -79,22 +79,22 @@
    LIGHT THEME (Default)
    ============================================================ */
 :root,
-[data-theme="light"] {
+html[data-theme="light"] {
   --color-scheme: light;
 
   /* Surfaces & Backgrounds */
   --bg-page: #f8fafc;
   --bg-app: #f1f5f9;
-  --bg-sidebar: rgba(255, 255, 255, 0.82);
-  --bg-surface: rgba(255, 255, 255, 0.88);
+  --bg-sidebar: rgba(255, 255, 255, 0.85);
+  --bg-surface: rgba(255, 255, 255, 0.9);
   --bg-surface-elevated: #ffffff;
-  --bg-surface-subtle: rgba(241, 245, 249, 0.7);
-  --bg-surface-hover: rgba(241, 245, 249, 0.95);
+  --bg-surface-subtle: rgba(241, 245, 249, 0.8);
+  --bg-surface-hover: rgba(241, 245, 249, 0.98);
   --bg-surface-active: #e2e8f0;
 
   /* Glassmorphism Overlays */
-  --glass-bg: rgba(255, 255, 255, 0.75);
-  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(226, 232, 240, 0.8);
   --glass-blur: blur(18px) saturate(180%);
 
   /* Text & Content */
@@ -105,8 +105,8 @@
   --text-on-accent: #ffffff;
 
   /* Borders & Dividers */
-  --border-subtle: rgba(226, 232, 240, 0.7);
-  --border-default: rgba(203, 213, 225, 0.8);
+  --border-subtle: rgba(226, 232, 240, 0.8);
+  --border-default: rgba(203, 213, 225, 0.85);
   --border-strong: #94a3b8;
   --border-focus: var(--brand-violet);
 
@@ -132,6 +132,21 @@
   --info-subtle: rgba(2, 132, 199, 0.12);
   --info-text: #0369a1;
 
+  /* Code & Pre */
+  --code-bg: #f8fafc;
+  --code-text: #1e293b;
+  --code-border: #e2e8f0;
+
+  /* Scrollbars & Overlays */
+  --scrollbar-thumb: rgba(203, 213, 225, 0.8);
+  --scrollbar-thumb-hover: #94a3b8;
+  --modal-backdrop: rgba(15, 23, 42, 0.5);
+
+  /* Search Highlights */
+  --search-mark-bg: rgba(254, 240, 138, 0.7);
+  --search-mark-text: #713f12;
+  --search-mark-border: #eab308;
+
   /* Layered Shadows */
   --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
   --shadow-sm: 0 2px 6px -1px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
@@ -152,22 +167,22 @@
 /* ============================================================
    DARK THEME
    ============================================================ */
-[data-theme="dark"] {
+html[data-theme="dark"] {
   --color-scheme: dark;
 
   /* Surfaces & Backgrounds */
   --bg-page: #0a0c14;
   --bg-app: #0f121d;
-  --bg-sidebar: rgba(15, 18, 29, 0.78);
-  --bg-surface: rgba(20, 24, 38, 0.78);
+  --bg-sidebar: rgba(15, 18, 29, 0.85);
+  --bg-surface: rgba(20, 24, 38, 0.85);
   --bg-surface-elevated: #1a1f33;
-  --bg-surface-subtle: rgba(28, 33, 52, 0.55);
-  --bg-surface-hover: rgba(33, 40, 64, 0.85);
+  --bg-surface-subtle: rgba(28, 33, 52, 0.65);
+  --bg-surface-hover: rgba(33, 40, 64, 0.88);
   --bg-surface-active: #28304c;
 
   /* Glassmorphism Overlays */
-  --glass-bg: rgba(18, 22, 36, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-bg: rgba(18, 22, 36, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: blur(20px) saturate(190%);
 
   /* Text & Content */
@@ -178,9 +193,9 @@
   --text-on-accent: #ffffff;
 
   /* Borders & Dividers */
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-default: rgba(255, 255, 255, 0.12);
-  --border-strong: rgba(255, 255, 255, 0.22);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.25);
   --border-focus: #a855f7;
 
   /* Functional Colors */
@@ -204,6 +219,21 @@
   --info: #38bdf8;
   --info-subtle: rgba(56, 189, 248, 0.16);
   --info-text: #7dd3fc;
+
+  /* Code & Pre */
+  --code-bg: #0d1117;
+  --code-text: #c9d1d9;
+  --code-border: rgba(255, 255, 255, 0.12);
+
+  /* Scrollbars & Overlays */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+  --modal-backdrop: rgba(0, 0, 0, 0.75);
+
+  /* Search Highlights */
+  --search-mark-bg: rgba(234, 179, 8, 0.35);
+  --search-mark-text: #fef08a;
+  --search-mark-border: #facc15;
 
   /* Layered Shadows */
   --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);

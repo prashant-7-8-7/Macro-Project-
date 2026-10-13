@@ -129,7 +129,8 @@ pre,
 }
 
 /* Essential Global Utilities */
-.hidden {
+.hidden,
+.hidden-input {
   display: none !important;
 }
 

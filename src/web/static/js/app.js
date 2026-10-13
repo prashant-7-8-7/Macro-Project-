@@ -68,28 +68,37 @@ window.showToast = function(message, type = 'info', duration = 3500) {
 };
 
 // Theme Management
+function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+        localStorage.setItem('theme', theme);
+    } catch (e) {}
+}
+
 function setupTheme() {
     const savedTheme = localStorage.getItem('theme');
     const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
     
-    document.documentElement.setAttribute('data-theme', initialTheme);
+    applyTheme(initialTheme);
 
     const themeToggleBtn = document.getElementById('theme-toggle');
-    if (themeToggleBtn) {
-        themeToggleBtn.addEventListener('click', () => {
-            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    if (themeToggleBtn && !themeToggleBtn.dataset.bound) {
+        themeToggleBtn.dataset.bound = 'true';
+        themeToggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const currentTheme = document.documentElement.dataset.theme || document.documentElement.getAttribute('data-theme') || 'light';
             const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', nextTheme);
-            localStorage.setItem('theme', nextTheme);
+            applyTheme(nextTheme);
         });
     }
 
-    if (window.matchMedia) {
+    if (window.matchMedia && !window._themeMediaBound) {
+        window._themeMediaBound = true;
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
             if (!localStorage.getItem('theme')) {
-                const autoTheme = e.matches ? 'dark' : 'light';
-                document.documentElement.setAttribute('data-theme', autoTheme);
+                applyTheme(e.matches ? 'dark' : 'light');
             }
         });
     }
