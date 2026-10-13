@@ -34,3 +34,4 @@ requirements_utf8.txt
 # Personal uploaded data files (keep directory, ignore arbitrary files)
 data/uploads/*
 !data/uploads/.gitkeep
+documents.db
