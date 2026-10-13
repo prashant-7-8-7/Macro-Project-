@@ -640,8 +640,35 @@ function renderDocumentContent(chunks, searchQuery = '') {
 // --- Chat & QA Logic ---
 function setupChat() {
     btnSend.addEventListener('click', handleSendChat);
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleSendChat();
+    
+    // Auto-resizing textarea & Keydown Handling (Enter to send, Shift+Enter for newline)
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendChat();
+            }
+        });
+        
+        chatInput.addEventListener('input', () => {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = `${Math.min(chatInput.scrollHeight, 120)}px`;
+        });
+    }
+
+    // Suggested Question Chips Click Handler
+    const suggestedChips = document.querySelectorAll('.suggested-chip');
+    suggestedChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            const query = chip.dataset.query;
+            if (query && activeDocumentId) {
+                chatInput.value = query;
+                chatInput.style.height = 'auto';
+                handleSendChat();
+            } else if (!activeDocumentId) {
+                alert('Please select a document first.');
+            }
+        });
     });
     
     btnSummarize.addEventListener('click', async () => {
