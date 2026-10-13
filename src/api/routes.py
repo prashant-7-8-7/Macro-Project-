@@ -6,11 +6,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
+import logging
 import os
 import shutil
 from pathlib import Path
 from pydantic import BaseModel
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 from src.config import UPLOAD_DIR
 from src.ingestion.pipeline import IngestionPipeline
@@ -253,7 +256,15 @@ async def generate_quiz(
                 detail="Document not found or contains no text."
             )
 
-        # Generate candidate questions
+        logger.info(
+            "[Quiz Route] Incoming quiz request: doc_id=%s, requested=%d, difficulty=%s, total_doc_chunks=%d",
+            request.document_id,
+            request.num_questions,
+            request.difficulty,
+            len(contexts),
+        )
+
+        # Generate candidate questions via batch generation
         questions = generate_questions(
             contexts=contexts,
             num_questions=request.num_questions,
@@ -266,12 +277,83 @@ async def generate_quiz(
             contexts,
         )
 
+        total_generated = len(questions)
+
+        # Retry loop: if verified count is below requested, make up to 3 retry attempts for only missing number
+        retry_attempts = 0
+        while len(verified) < request.num_questions and retry_attempts < 3:
+            retry_attempts += 1
+            missing_count = request.num_questions - len(verified)
+            logger.info(
+                "[Quiz Route Retry] Attempt %d/3: Generating %d missing questions (current verified=%d, requested=%d)",
+                retry_attempts,
+                missing_count,
+                len(verified),
+                request.num_questions,
+            )
+
+            retry_candidates = generate_questions(
+                contexts=contexts,
+                num_questions=missing_count,
+                difficulty=request.difficulty,
+            )
+            if not retry_candidates:
+                break
+
+            total_generated += len(retry_candidates)
+            more_verified, more_rejected = validate_questions(
+                retry_candidates,
+                contexts,
+            )
+
+            seen_existing = {" ".join(q.question.lower().split()) for q in verified}
+            newly_added = 0
+            for mq in more_verified:
+                norm_q = " ".join(mq.question.lower().split())
+                if norm_q not in seen_existing:
+                    seen_existing.add(norm_q)
+                    verified.append(mq)
+                    newly_added += 1
+
+            rejected.extend(more_rejected)
+            logger.info(
+                "[Quiz Route Retry] Attempt %d added %d newly verified questions (total verified now: %d)",
+                retry_attempts,
+                newly_added,
+                len(verified),
+            )
+
+            if newly_added == 0:
+                break
+
+        # Trim verified questions to requested count if extra were generated
+        if len(verified) > request.num_questions:
+            verified = verified[:request.num_questions]
+
+        # Transparent message if document content was too small to reach requested count
+        message = None
+        if len(verified) < request.num_questions:
+            message = f"Only {len(verified)} verified questions could be generated from this document (requested {request.num_questions})."
+        else:
+            message = f"{len(verified)} verified questions generated successfully."
+
+        logger.info(
+            "[Quiz Route] Final result for doc_id=%s: requested=%d, verified=%d, total_generated=%d, rejected=%d, message='%s'",
+            request.document_id,
+            request.num_questions,
+            len(verified),
+            total_generated,
+            len(rejected),
+            message,
+        )
+
         return QuizResponse(
             document_id=request.document_id,
             questions=verified,
-            generated_count=len(questions),
+            generated_count=total_generated,
             verified_count=len(verified),
             rejected_count=len(rejected),
+            message=message,
         )
 
     except HTTPException:

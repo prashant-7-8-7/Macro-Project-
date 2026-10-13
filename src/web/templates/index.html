@@ -5,40 +5,84 @@
 <head>
 
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI Document Workspace — Fast RAG, interactive quiz generator, and neural study notes powered by Gemini.">
+    <meta name="theme-color" content="#7c3aed">
 
-    <title>AI Document Workspace</title>
+    <title>Workspace — AI Document Intelligence</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%234f46e5'/><stop offset='50%25' stop-color='%237c3aed'/><stop offset='100%25' stop-color='%23ec4899'/></linearGradient></defs><rect width='100' height='100' rx='28' fill='url(%23g)'/><path d='M30 35h40M30 50h40M30 65h24' stroke='%23ffffff' stroke-width='8' stroke-linecap='round'/><circle cx='68' cy='65' r='5' fill='%23ffffff'/></svg>">
 
     <link rel="stylesheet" href="/static/css/style.css">
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- Immediate Theme Initialization to Prevent Flash of Wrong Theme -->
+    <script>
+        (function() {
+            try {
+                var saved = localStorage.getItem('theme');
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var theme = saved || (prefersDark ? 'dark' : 'light');
+                document.documentElement.dataset.theme = theme;
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {}
+        })();
+    </script>
 </head>
-
 <body>
+    <!-- Animated Aurora Mesh Background -->
+    <div class="aurora-background" aria-hidden="true">
+        <div class="aurora-blob aurora-blob-1"></div>
+        <div class="aurora-blob aurora-blob-2"></div>
+        <div class="aurora-blob aurora-blob-3"></div>
+        <div class="aurora-blob aurora-blob-4"></div>
+    </div>
 
     <div class="app-container">
-
         <!-- LEFT SIDEBAR -->
-
         <aside class="sidebar">
-
             <div class="sidebar-header">
-
-                <h2><i class="fa-solid fa-layer-group"></i> Workspace</h2>
-
+                <div class="brand-title-group">
+                    <div class="brand-logo-mark" aria-hidden="true">
+                        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="32" height="32" rx="9" fill="url(#brandLogoGrad)" />
+                            <path d="M9 11h14M9 16h14M9 21h8" stroke="#fff" stroke-width="2.2" stroke-linecap="round" />
+                            <circle cx="22" cy="21" r="1.8" fill="#fff" />
+                            <defs>
+                                <linearGradient id="brandLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                                    <stop stop-color="#4F46E5" />
+                                    <stop offset="0.5" stop-color="#7C3AED" />
+                                    <stop offset="1" stop-color="#EC4899" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <h2>Workspace</h2>
+                </div>
+                <div class="sidebar-header-actions">
+                    <button id="btn-cmd-palette-trigger" class="theme-toggle-btn" data-tooltip="Command Palette (Ctrl+K)" title="Command Palette (Ctrl+K)" aria-label="Open Command Palette">
+                        <i class="fa-solid fa-terminal"></i>
+                    </button>
+                    <button id="theme-toggle" class="theme-toggle-btn" data-tooltip="Toggle Theme (Light / Dark)" title="Toggle theme (Light / Dark)" aria-label="Toggle theme">
+                        <i class="fa-solid fa-moon icon-moon"></i>
+                        <i class="fa-solid fa-sun icon-sun"></i>
+                    </button>
+                    <button id="sidebar-toggle" class="theme-toggle-btn" data-tooltip="Toggle Sidebar (Ctrl+\)" title="Collapse / Expand Sidebar (Ctrl+\)" aria-label="Toggle sidebar">
+                        <i class="fa-solid fa-bars-staggered"></i>
+                    </button>
+                </div>
             </div>
 
-            <div class="upload-section" id="upload-zone">
+            <div class="upload-section" id="upload-zone" role="region" aria-label="Document upload dropzone" tabindex="0">
 
-                <input type="file" id="file-input" class="hidden-input" accept=".pdf,.txt,.docx,.csv,.json">
+                <input type="file" id="file-input" class="hidden-input" accept=".pdf,.txt,.docx,.csv,.json" aria-label="Upload document file">
 
                 <div class="upload-prompt">
 
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
 
                     <p>Drag & Drop or Click to Upload</p>
 
@@ -46,26 +90,35 @@
 
                 </div>
 
-                <div class="upload-progress hidden" id="upload-progress">
-
-                    <div class="spinner"></div>
-
-                    <p>Processing...</p>
-
+                <div class="upload-progress hidden" id="upload-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Upload and processing progress">
+                    <div class="upload-progress-header">
+                        <div class="spinner" aria-hidden="true"></div>
+                        <span id="upload-progress-text">Processing document...</span>
+                        <span id="upload-progress-percent">0%</span>
+                    </div>
+                    <div class="upload-progress-bar-track">
+                        <div class="upload-progress-bar-fill" id="upload-progress-bar"></div>
+                    </div>
                 </div>
-
             </div>
 
             <div class="documents-section">
-
-                <h3>Library</h3>
-
-                <ul id="documents-list" class="doc-list">
-
+                <div class="documents-section-header">
+                    <h3>Library</h3>
+                    <span class="documents-count-badge" id="documents-count" aria-label="Total documents count">0</span>
+                </div>
+                <div class="library-search-wrapper">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input type="text" id="library-search-input" placeholder="Search documents..." autocomplete="off" aria-label="Search documents in library">
+                    <button id="library-search-clear" class="btn-clear hidden" aria-label="Clear search"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <ul id="documents-list" class="doc-list" role="list" aria-label="Uploaded documents list">
                     <!-- Documents populated here -->
-
                 </ul>
-
+                <div id="library-empty-state" class="library-empty hidden">
+                    <i class="fa-regular fa-folder-open"></i>
+                    <p>No documents found</p>
+                </div>
             </div>
 
         </aside>
@@ -76,15 +129,19 @@
         <main class="main-content">
 
             <!-- Empty State -->
-
             <div id="empty-state" class="empty-state">
-
-                <i class="fa-regular fa-folder-open"></i>
-
-                <h2>Select a document to begin</h2>
-
-                <p>Upload a new file or select one from your library to read, summarize, and ask questions.</p>
-
+                <div class="empty-state-card glass-panel">
+                    <div class="empty-state-icon-wrapper">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                    <h2>Select a document to begin</h2>
+                    <p>Upload a file or choose one from your library to read, generate quizzes, and explore with AI.</p>
+                    <div class="empty-state-badges">
+                        <span class="badge badge-brand"><i class="fa-solid fa-graduation-cap"></i> Quiz Maker</span>
+                        <span class="badge badge-subtle"><i class="fa-solid fa-book-open"></i> Study Notes</span>
+                        <span class="badge badge-subtle"><i class="fa-solid fa-comments"></i> AI Assistant</span>
+                    </div>
+                </div>
             </div>
 
 
@@ -92,212 +149,203 @@
 
             <div id="document-workspace" class="document-workspace hidden">
 
-                <!-- Document Viewer -->
-
-                <section class="document-viewer">
-
+                <!-- Center Column: Document & Quiz Tabs Workspace -->
+                <div class="workspace-center-column">
                     <header class="viewer-header">
-
-                        <h2 id="viewer-title">Document Title</h2>
-
-                        <div class="viewer-meta" id="viewer-meta">PDF • 2 pages</div>
-
-                    </header>
-
-                    <div class="viewer-content" id="viewer-content">
-
-                        <div class="skeleton-loader">
-
-                            <div class="line"></div>
-
-                            <div class="line"></div>
-
-                            <div class="line"></div>
-
+                        <!-- Reading Progress Bar -->
+                        <div class="reading-progress-track" aria-hidden="true">
+                            <div id="reading-progress-bar" class="reading-progress-fill"></div>
                         </div>
 
-                    </div>
-
-                </section>
-
-
-                <!-- AI Assistant -->
-
-                <section class="ai-assistant">
-
-                    <header class="assistant-header">
-
-                        <h3><i class="fa-solid fa-sparkles"></i> AI Assistant</h3>
-
-                        <div style="display:flex;gap:8px;">
-
-                            <button id="btn-make-notes" class="btn-primary-outline">
-                                <i class="fa-solid fa-pen-nib"></i> Make Notes
-                            </button>
-
-                            <button id="btn-summarize" class="btn-primary-outline">
-                                <i class="fa-solid fa-bolt"></i> Summarize
-                            </button>
-
-                        </div>
-
-                    </header>
-
-                    <div class="chat-container" id="chat-container">
-
-                        <div class="chat-message ai-message">
-
-                            <div class="avatar">
-
-                                <i class="fa-solid fa-robot"></i>
-
+                        <div class="viewer-header-top">
+                            <div class="viewer-title-group">
+                                <h2 id="viewer-title">Document Title</h2>
+                                <div class="viewer-meta-row">
+                                    <span id="viewer-meta" class="viewer-meta">PDF • 2 pages</span>
+                                    <button id="copy-doc-id" class="chip-copy-id" title="Click to copy full Document ID">
+                                        <i class="fa-solid fa-fingerprint"></i>
+                                        <span id="copy-doc-id-text">Copy ID</span>
+                                    </button>
+                                </div>
                             </div>
+                            <!-- Workspace Navigation Tabs -->
+                            <nav class="workspace-tabs" role="tablist" aria-label="Workspace Views">
+                                <button id="tab-btn-document" class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-panel-document">
+                                    <i class="fa-regular fa-file-lines"></i>
+                                    <span>Document</span>
+                                </button>
+                                <button id="tab-btn-quiz" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-panel-quiz">
+                                    <i class="fa-solid fa-graduation-cap"></i>
+                                    <span>Quiz Maker</span>
+                                </button>
+                                <button id="tab-btn-notes" class="tab-btn" role="tab" aria-selected="false">
+                                    <i class="fa-solid fa-pen-nib"></i>
+                                    <span>Study Notes</span>
+                                </button>
+                            </nav>
+                        </div>
 
-                            <div class="message-content">
-
-                                Hello! I'm ready to answer any questions about this document.
-
+                        <!-- In-Document Search Toolbar -->
+                        <div class="viewer-search-toolbar" id="doc-search-toolbar" role="search" aria-label="Document text search">
+                            <div class="doc-search-input-wrapper">
+                                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                                <input type="text" id="doc-search-input" placeholder="Search inside this document..." autocomplete="off" aria-label="Search inside this document">
+                                <span id="doc-search-count" class="doc-search-count-pill hidden">0 matches</span>
+                                <button id="doc-search-clear" class="btn-clear hidden" aria-label="Clear in-document search"><i class="fa-solid fa-xmark"></i></button>
                             </div>
-
                         </div>
-
-                        <!-- Chat messages injected here -->
-
-                    </div>
-
-                    <div class="chat-input-area">
-
-                        <div class="input-wrapper">
-
-                            <input type="text"
-
-                                   id="chat-input"
-
-                                   placeholder="Ask a question about this document...">
-
-                            <button id="btn-send">
-
-                                <i class="fa-solid fa-paper-plane"></i>
-
-                            </button>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                <!-- ========================= -->
-
-                <!-- QUIZ MAKER -->
-
-                <!-- ========================= -->
-
-                <section class="quiz-maker">
-
-                    <header class="quiz-header">
-
-                        <div>
-
-                            <h3>
-
-                                <i class="fa-solid fa-graduation-cap"></i>
-
-                                Quiz Maker
-
-                            </h3>
-
-                            <p>
-
-                                Generate a source-grounded quiz from this document.
-
-                            </p>
-
-                        </div>
-
                     </header>
 
-
-                    <div class="quiz-controls">
-
-                        <div class="quiz-control">
-
-                            <label for="quiz-question-count">
-
-                                Questions
-
-                            </label>
-
-                            <select id="quiz-question-count">
-
-                                <option value="5">5</option>
-
-                                <option value="10" selected>10</option>
-
-                                <option value="15">15</option>
-
-                                <option value="20">20</option>
-
-                            </select>
-
+                    <!-- Tab Panel 1: Document Chunks Viewer -->
+                    <section id="tab-panel-document" class="tab-panel active document-viewer">
+                        <div class="viewer-content" id="viewer-content">
+                            <div class="skeleton-loader">
+                                <div class="line"></div>
+                                <div class="line"></div>
+                                <div class="line"></div>
+                            </div>
                         </div>
-
-
-                        <div class="quiz-control">
-
-                            <label for="quiz-difficulty">
-
-                                Difficulty
-
-                            </label>
-
-                            <select id="quiz-difficulty">
-
-                                <option value="mixed" selected>Mixed</option>
-
-                                <option value="easy">Easy</option>
-
-                                <option value="medium">Medium</option>
-
-                                <option value="hard">Hard</option>
-
-                            </select>
-
-                        </div>
-
-
-                        <button id="btn-generate-quiz" class="btn-primary">
-
-                            <i class="fa-solid fa-wand-magic-sparkles"></i>
-
-                            Generate Quiz
-
+                        <!-- Floating Scroll To Top Button -->
+                        <button id="btn-scroll-top" class="btn-scroll-top hidden" title="Scroll to top" aria-label="Scroll to top">
+                            <i class="fa-solid fa-arrow-up"></i>
                         </button>
+                    </section>
 
-                    </div>
+                    <!-- Tab Panel 2: Quiz Maker -->
+                    <section id="tab-panel-quiz" class="tab-panel quiz-maker hidden">
+                        <header class="quiz-header">
+                            <div>
+                                <h3>
+                                    <i class="fa-solid fa-graduation-cap"></i>
+                                    Quiz Maker
+                                </h3>
+                                <p>
+                                    Generate an interactive, source-grounded quiz from this document.
+                                </p>
+                            </div>
+                        </header>
 
+                        <div class="quiz-controls glass-panel">
+                            <div class="quiz-control">
+                                <label for="quiz-question-count">
+                                    <i class="fa-solid fa-list-ol"></i> Questions
+                                </label>
+                                <div class="segmented-control" id="quiz-count-segments">
+                                    <button type="button" class="segment-btn" data-value="5">5</button>
+                                    <button type="button" class="segment-btn active" data-value="10">10</button>
+                                    <button type="button" class="segment-btn" data-value="15">15</button>
+                                    <button type="button" class="segment-btn" data-value="20">20</button>
+                                </div>
+                                <select id="quiz-question-count" class="visually-hidden">
+                                    <option value="5">5</option>
+                                    <option value="10" selected>10</option>
+                                    <option value="15">15</option>
+                                    <option value="20">20</option>
+                                </select>
+                            </div>
 
-                    <!-- Quiz generation status -->
+                            <div class="quiz-control">
+                                <label for="quiz-difficulty">
+                                    <i class="fa-solid fa-sliders"></i> Difficulty
+                                </label>
+                                <div class="segmented-control" id="quiz-difficulty-segments">
+                                    <button type="button" class="segment-btn active" data-value="mixed">Mixed</button>
+                                    <button type="button" class="segment-btn" data-value="easy">Easy</button>
+                                    <button type="button" class="segment-btn" data-value="medium">Medium</button>
+                                    <button type="button" class="segment-btn" data-value="hard">Hard</button>
+                                </div>
+                                <select id="quiz-difficulty" class="visually-hidden">
+                                    <option value="mixed" selected>Mixed</option>
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
 
-                    <div id="quiz-status" class="quiz-status hidden"></div>
+                            <button id="btn-generate-quiz" class="btn-generate-quiz btn-primary">
+                                <span class="btn-shine"></span>
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>Generate Quiz</span>
+                            </button>
+                        </div>
 
+                        <!-- Quiz generation status -->
+                        <div id="quiz-status" class="quiz-status hidden"></div>
 
-                    <!-- Generated questions -->
+                        <!-- Generated questions -->
+                        <div id="quiz-results" class="quiz-results hidden">
+                            <!-- Questions inserted by JavaScript -->
+                        </div>
+                    </section>
+            </div> <!-- /workspace-center-column -->
 
-                    <div id="quiz-results" class="quiz-results hidden">
-
-                        <!-- Questions inserted by JavaScript -->
-
-                    </div>
-
-                </section>
-
+            <!-- Drag Handle for Resizing AI Panel -->
+            <div id="ai-panel-resizer" class="panel-resizer" title="Drag to resize AI Assistant" aria-label="Resize AI Assistant Panel" role="separator" aria-orientation="vertical">
+                <div class="resizer-handle-pill"></div>
             </div>
 
-        </main>
+            <!-- AI Assistant Panel -->
+            <section class="ai-assistant">
+                <header class="assistant-header">
+                    <div class="assistant-title-group">
+                        <h3><i class="fa-solid fa-sparkles"></i> AI Assistant <span class="status-dot online" title="Connected to Google Gemini AI" aria-label="Online"></span></h3>
+                    </div>
+                    <div class="assistant-actions">
+                        <button id="btn-make-notes" class="btn-primary-outline" title="Generate handwritten study notes">
+                            <i class="fa-solid fa-pen-nib"></i> Make Notes
+                        </button>
+                        <button id="btn-summarize" class="btn-primary-outline" title="Generate quick summary of document">
+                            <i class="fa-solid fa-bolt"></i> Summarize
+                        </button>
+                        <button id="btn-clear-chat" class="btn-icon-subtle" data-tooltip="Clear Chat" title="Clear chat history" aria-label="Clear chat history">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </div>
+                </header>
 
-    </div>
+                <div class="chat-container" id="chat-container" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation with AI Assistant">
+                    <div class="chat-message ai-message">
+                        <div class="avatar">
+                            <i class="fa-solid fa-robot"></i>
+                        </div>
+                        <div class="message-content">
+                            Hello! I'm ready to answer any questions about this document.
+                        </div>
+                    </div>
+                    <!-- Chat messages injected here -->
+                </div>
+
+                <div class="chat-input-area">
+                    <!-- Suggested Question Chips -->
+                    <div id="suggested-questions-container" class="suggested-questions-container">
+                        <div id="suggested-chips-list" class="suggested-chips-list">
+                            <button class="suggested-chip" data-query="What are the key points in this document?">
+                                <i class="fa-regular fa-lightbulb"></i> Key points?
+                            </button>
+                            <button class="suggested-chip" data-query="Can you summarize the main findings?">
+                                <i class="fa-solid fa-bolt"></i> Main findings?
+                            </button>
+                            <button class="suggested-chip" data-query="Explain the most important concepts simply.">
+                                <i class="fa-regular fa-compass"></i> Explain simply
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="input-wrapper">
+                        <textarea id="chat-input"
+                                  placeholder="Ask a question about this document... (Shift+Enter for newline)"
+                                  aria-label="Ask a question about this document"
+                                  rows="1"
+                                  autocomplete="off"></textarea>
+                        <button id="btn-send" aria-label="Send question" title="Send question">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div> <!-- /document-workspace -->
+    </main>
+</div> <!-- /app-container -->
 
 
     <!-- Template for Source Citations -->
@@ -321,29 +369,89 @@
     </template>
 
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Command Palette (Ctrl+K) Modal -->
+    <div id="command-palette-modal" class="palette-backdrop hidden" role="dialog" aria-modal="true" aria-label="Command Palette">
+        <div class="palette-container glass-panel">
+            <div class="palette-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="palette-search-input" placeholder="Type a command or search documents... (Esc to close)" autocomplete="off">
+                <kbd class="kbd-badge">ESC</kbd>
+            </div>
+            <div class="palette-results-list" id="palette-results-list">
+                <!-- Dynamically populated commands and documents -->
+            </div>
+            <div class="palette-footer">
+                <span><kbd class="kbd-badge">↑</kbd><kbd class="kbd-badge">↓</kbd> Navigate</span>
+                <span><kbd class="kbd-badge">↵</kbd> Select</span>
+                <span><kbd class="kbd-badge">ESC</kbd> Close</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Help Modal -->
+    <div id="shortcuts-help-modal" class="palette-backdrop hidden" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts">
+        <div class="shortcuts-container glass-panel">
+            <div class="shortcuts-header">
+                <h3><i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts</h3>
+                <button id="shortcuts-btn-close" class="btn-clear" aria-label="Close shortcuts modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="shortcuts-grid">
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Open Command Palette</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Ctrl</kbd> + <kbd class="kbd-badge">K</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Show Shortcuts Help</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">?</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Toggle Left Sidebar</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Ctrl</kbd> + <kbd class="kbd-badge">\</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Toggle Dark / Light Theme</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Ctrl</kbd> + <kbd class="kbd-badge">D</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Send AI Message</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Enter</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">New Line in Chat</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Shift</kbd> + <kbd class="kbd-badge">Enter</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Close Active Modal</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Escape</kbd></span>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Notes Modal -->
-    <div id="notes-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 16px;">
+    <div id="notes-modal" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:var(--modal-backdrop);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 16px;">
         <div style="max-width:860px;margin:0 auto;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
                 <div style="display:flex;gap:10px;">
-                    <button id="notes-btn-print" style="background:#2d8a4e;border:none;border-radius:8px;padding:10px 18px;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">🖨 Print / Save PDF</button>
+                    <button id="notes-btn-print" style="background:var(--success);border:none;border-radius:var(--radius-md);padding:10px 18px;color:var(--text-on-accent);font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">🖨 Print / Save PDF</button>
                 </div>
-                <button id="notes-btn-close" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 18px;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">✕ Close</button>
+                <button id="notes-btn-close" style="background:var(--bg-surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:10px 18px;color:var(--text-primary);font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">✕ Close</button>
             </div>
             <div id="notes-notebook"></div>
         </div>
     </div>
 
     <!-- Notes Loading Overlay -->
-    <div id="notes-loading" style="display:none;position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,0.92);flex-direction:column;align-items:center;justify-content:center;gap:18px;">
+    <div id="notes-loading" style="display:none;position:fixed;inset:0;z-index:1001;background:var(--modal-backdrop);backdrop-filter:blur(8px);flex-direction:column;align-items:center;justify-content:center;gap:18px;">
         <div style="font-size:2.8rem;animation:nf-write 0.5s ease-in-out infinite alternate;">✏️</div>
-        <div style="font-family:'Caveat',cursive;font-size:1.5rem;color:#fff;">Writing your notes...</div>
-        <div style="width:180px;height:7px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">
-            <div style="height:100%;background:linear-gradient(90deg,#f4a261,#e07a30);border-radius:4px;animation:nf-bar 2.5s ease-in-out infinite;"></div>
+        <div style="font-family:'Caveat',cursive;font-size:1.5rem;color:var(--text-primary);">Writing your notes...</div>
+        <div style="width:180px;height:7px;background:var(--bg-surface-subtle);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;background:var(--brand-gradient);border-radius:4px;animation:nf-bar 2.5s ease-in-out infinite;"></div>
         </div>
-        <div id="notes-loading-step" style="font-size:0.85rem;color:#a7a9be;">Extracting document text...</div>
+        <div id="notes-loading-step" style="font-size:0.85rem;color:var(--text-muted);">Extracting document text...</div>
     </div>
 
     <style>

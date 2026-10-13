@@ -22,8 +22,26 @@ LLM_MODELS = [
 
 
 def _call_gemini_api(api_key: str, prompt: str) -> Optional[str]:
-    """Direct Google Gemini REST caller."""
-    gemini_models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+    """Call Google Gemini using google-genai SDK or direct REST with modern models."""
+    gemini_models = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash"]
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        for model in gemini_models:
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt
+                )
+                if response.text and response.text.strip():
+                    logger.info("Gemini SDK request succeeded with model=%s", model)
+                    return response.text.strip()
+            except Exception as e:
+                logger.warning("Gemini SDK failed model=%s: %s", model, e)
+    except Exception as e:
+        logger.warning("Failed to initialize google-genai client: %s", e)
+
+    # REST fallback
     for model in gemini_models:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
@@ -40,10 +58,10 @@ def _call_gemini_api(api_key: str, prompt: str) -> Optional[str]:
                 data = json.loads(resp.read().decode("utf-8"))
                 text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                 if text and text.strip():
-                    logger.info("Gemini request succeeded with model=%s", model)
+                    logger.info("Gemini REST request succeeded with model=%s", model)
                     return text.strip()
         except Exception as e:
-            logger.warning("Gemini failed model=%s: %s", model, e)
+            logger.warning("Gemini REST failed model=%s: %s", model, e)
     return None
 
 def _call_groq_api(api_key: str, prompt: str) -> Optional[str]:
@@ -81,21 +99,24 @@ def call_llm(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
     Central LLM caller supporting Google Gemini, Groq, and OpenRouter.
     Automatically detects the key provider.
     """
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY")
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    groq_key = os.environ.get("GROQ_API_KEY")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    api_key = gemini_key or groq_key or openrouter_key
 
     if not api_key:
         logger.warning("API key is not configured.")
         return None
 
-    # 1. Google Gemini native key
-    if api_key.startswith("AIza"):
-        res = _call_gemini_api(api_key, prompt)
+    # 1. Google Gemini key (supports AIza..., AQ..., or any configured GEMINI_API_KEY)
+    if gemini_key:
+        res = _call_gemini_api(gemini_key, prompt)
         if res:
             return res
 
     # 2. Groq key
-    if api_key.startswith("gsk_"):
-        res = _call_groq_api(api_key, prompt)
+    if groq_key or (api_key and api_key.startswith("gsk_")):
+        res = _call_groq_api(groq_key or api_key, prompt)
         if res:
             return res
 

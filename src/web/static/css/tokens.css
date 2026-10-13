@@ -1,0 +1,253 @@
+/**
+ * tokens.css - Design Token System
+ * Premium Color Palettes, Typography Scales, Radii, Shadows, Spacing, and Easing
+ */
+
+:root {
+  /* Brand Core Gradients (Indigo -> Violet -> Pink) */
+  --brand-indigo: #4f46e5;
+  --brand-violet: #7c3aed;
+  --brand-pink: #ec4899;
+  --brand-cyan: #06b6d4;
+  --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #4338ca 0%, #6d28d9 50%, #db2777 100%);
+  --brand-gradient-subtle: linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(124, 58, 237, 0.12) 50%, rgba(236, 72, 153, 0.12) 100%);
+  --brand-glow: rgba(124, 58, 237, 0.35);
+
+  /* Typography Font Stacks */
+  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-handwriting: 'Caveat', 'Kalam', 'Patrick Hand', cursive;
+
+  /* Type Scale */
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.84375rem; /* 13.5px */
+  --text-base: 0.9375rem;/* 15px */
+  --text-lg: 1.0625rem;  /* 17px */
+  --text-xl: 1.25rem;    /* 20px */
+  --text-2xl: 1.5rem;    /* 24px */
+  --text-3xl: 1.875rem;  /* 30px */
+
+  /* Spacing Scale */
+  --space-0-5: 0.125rem; /* 2px */
+  --space-1: 0.25rem;    /* 4px */
+  --space-1-5: 0.375rem; /* 6px */
+  --space-2: 0.5rem;     /* 8px */
+  --space-2-5: 0.625rem; /* 10px */
+  --space-3: 0.75rem;    /* 12px */
+  --space-4: 1rem;       /* 16px */
+  --space-5: 1.25rem;    /* 20px */
+  --space-6: 1.5rem;     /* 24px */
+  --space-8: 2rem;       /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+
+  /* Radii Scale */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+  --radius-full: 9999px;
+
+  /* Z-Index Hierarchy */
+  --z-background: -1;
+  --z-base: 1;
+  --z-elevated: 10;
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-drawer: 200;
+  --z-modal: 1000;
+  --z-popover: 1100;
+  --z-toast: 1200;
+
+  /* Motion & Easing Curves */
+  --dur-instant: 100ms;
+  --dur-fast: 180ms;
+  --dur-normal: 280ms;
+  --dur-slow: 450ms;
+  --dur-extended: 800ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ============================================================
+   LIGHT THEME (Default)
+   ============================================================ */
+:root,
+html[data-theme="light"] {
+  --color-scheme: light;
+
+  /* Surfaces & Backgrounds */
+  --bg-page: #f8fafc;
+  --bg-app: #f1f5f9;
+  --bg-sidebar: rgba(255, 255, 255, 0.85);
+  --bg-surface: rgba(255, 255, 255, 0.9);
+  --bg-surface-elevated: #ffffff;
+  --bg-surface-subtle: rgba(241, 245, 249, 0.8);
+  --bg-surface-hover: rgba(241, 245, 249, 0.98);
+  --bg-surface-active: #e2e8f0;
+
+  /* Glassmorphism Overlays */
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(226, 232, 240, 0.8);
+  --glass-blur: blur(18px) saturate(180%);
+
+  /* Text & Content */
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --text-muted: #94a3b8;
+  --text-on-accent: #ffffff;
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(226, 232, 240, 0.8);
+  --border-default: rgba(203, 213, 225, 0.85);
+  --border-strong: #94a3b8;
+  --border-focus: var(--brand-violet);
+
+  /* Functional Colors */
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-subtle: rgba(99, 102, 241, 0.1);
+  --accent-border: rgba(99, 102, 241, 0.25);
+
+  --success: #10b981;
+  --success-subtle: rgba(16, 185, 129, 0.12);
+  --success-text: #047857;
+
+  --warning: #f59e0b;
+  --warning-subtle: rgba(245, 158, 11, 0.12);
+  --warning-text: #b45309;
+
+  --danger: #ef4444;
+  --danger-subtle: rgba(239, 68, 68, 0.12);
+  --danger-text: #b91c1c;
+
+  --info: #0284c7;
+  --info-subtle: rgba(2, 132, 199, 0.12);
+  --info-text: #0369a1;
+
+  /* Code & Pre */
+  --code-bg: #f8fafc;
+  --code-text: #1e293b;
+  --code-border: #e2e8f0;
+
+  /* Scrollbars & Overlays */
+  --scrollbar-thumb: rgba(203, 213, 225, 0.8);
+  --scrollbar-thumb-hover: #94a3b8;
+  --modal-backdrop: rgba(15, 23, 42, 0.5);
+
+  /* Search Highlights */
+  --search-mark-bg: rgba(254, 240, 138, 0.7);
+  --search-mark-text: #713f12;
+  --search-mark-border: #eab308;
+
+  /* Layered Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 2px 6px -1px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 8px 18px -4px rgba(15, 23, 42, 0.08), 0 3px 6px -2px rgba(15, 23, 42, 0.03);
+  --shadow-lg: 0 16px 32px -6px rgba(15, 23, 42, 0.1), 0 6px 12px -3px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 24px 48px -12px rgba(15, 23, 42, 0.14);
+  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --shadow-glow: 0 0 24px -2px var(--brand-glow);
+  --shadow-inner: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+
+  /* Aurora Background Colors */
+  --aurora-1: rgba(99, 102, 241, 0.08);
+  --aurora-2: rgba(168, 85, 247, 0.07);
+  --aurora-3: rgba(244, 114, 182, 0.06);
+  --aurora-4: rgba(14, 165, 233, 0.07);
+}
+
+/* ============================================================
+   DARK THEME
+   ============================================================ */
+html[data-theme="dark"] {
+  --color-scheme: dark;
+
+  /* Surfaces & Backgrounds */
+  --bg-page: #0a0c14;
+  --bg-app: #0f121d;
+  --bg-sidebar: rgba(15, 18, 29, 0.85);
+  --bg-surface: rgba(20, 24, 38, 0.85);
+  --bg-surface-elevated: #1a1f33;
+  --bg-surface-subtle: rgba(28, 33, 52, 0.65);
+  --bg-surface-hover: rgba(33, 40, 64, 0.88);
+  --bg-surface-active: #28304c;
+
+  /* Glassmorphism Overlays */
+  --glass-bg: rgba(18, 22, 36, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(20px) saturate(190%);
+
+  /* Text & Content */
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-muted: #64748b;
+  --text-on-accent: #ffffff;
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.25);
+  --border-focus: #a855f7;
+
+  /* Functional Colors */
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --accent-subtle: rgba(129, 140, 248, 0.16);
+  --accent-border: rgba(129, 140, 248, 0.35);
+
+  --success: #34d399;
+  --success-subtle: rgba(52, 211, 153, 0.16);
+  --success-text: #6ee7b7;
+
+  --warning: #fbbf24;
+  --warning-subtle: rgba(251, 191, 36, 0.16);
+  --warning-text: #fde68a;
+
+  --danger: #f87171;
+  --danger-subtle: rgba(248, 113, 113, 0.16);
+  --danger-text: #fca5a5;
+
+  --info: #38bdf8;
+  --info-subtle: rgba(56, 189, 248, 0.16);
+  --info-text: #7dd3fc;
+
+  /* Code & Pre */
+  --code-bg: #0d1117;
+  --code-text: #c9d1d9;
+  --code-border: rgba(255, 255, 255, 0.12);
+
+  /* Scrollbars & Overlays */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+  --modal-backdrop: rgba(0, 0, 0, 0.75);
+
+  /* Search Highlights */
+  --search-mark-bg: rgba(234, 179, 8, 0.35);
+  --search-mark-text: #fef08a;
+  --search-mark-border: #facc15;
+
+  /* Layered Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 6px -1px rgba(0, 0, 0, 0.5), 0 1px 3px -1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 18px -4px rgba(0, 0, 0, 0.55), 0 3px 6px -2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 32px -6px rgba(0, 0, 0, 0.65), 0 6px 12px -3px rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 24px 48px -12px rgba(0, 0, 0, 0.8);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 28px -2px rgba(168, 85, 247, 0.4);
+  --shadow-inner: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+
+  /* Aurora Background Colors */
+  --aurora-1: rgba(99, 102, 241, 0.16);
+  --aurora-2: rgba(168, 85, 247, 0.14);
+  --aurora-3: rgba(236, 72, 153, 0.12);
+  --aurora-4: rgba(6, 182, 212, 0.13);
+}

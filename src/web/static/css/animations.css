@@ -1,0 +1,215 @@
+/**
+ * animations.css - Animated Aurora Mesh, Transitions, and Shimmer Effects
+ */
+
+/* Aurora Mesh Background Container */
+.aurora-background {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-background);
+  overflow: hidden;
+  pointer-events: none;
+  background-color: var(--bg-page);
+}
+
+.aurora-blob {
+  position: absolute;
+  filter: blur(80px);
+  border-radius: var(--radius-full);
+  opacity: 0.65;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.aurora-blob-1 {
+  top: -15%;
+  left: -10%;
+  width: 55vw;
+  height: 55vh;
+  background: radial-gradient(circle, var(--aurora-1) 0%, transparent 70%);
+  animation: aurora-drift-1 22s ease-in-out infinite alternate;
+}
+
+.aurora-blob-2 {
+  top: 20%;
+  right: -15%;
+  width: 60vw;
+  height: 60vh;
+  background: radial-gradient(circle, var(--aurora-2) 0%, transparent 70%);
+  animation: aurora-drift-2 28s ease-in-out infinite alternate;
+}
+
+.aurora-blob-3 {
+  bottom: -20%;
+  left: 20%;
+  width: 50vw;
+  height: 50vh;
+  background: radial-gradient(circle, var(--aurora-3) 0%, transparent 70%);
+  animation: aurora-drift-3 25s ease-in-out infinite alternate;
+}
+
+.aurora-blob-4 {
+  top: 40%;
+  left: 35%;
+  width: 40vw;
+  height: 40vh;
+  background: radial-gradient(circle, var(--aurora-4) 0%, transparent 70%);
+  animation: aurora-drift-4 30s ease-in-out infinite alternate;
+}
+
+/* Keyframes for Smooth Floating Meshes */
+@keyframes aurora-drift-1 {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50%  { transform: translate(8vw, 10vh) scale(1.15) rotate(45deg); }
+  100% { transform: translate(-5vw, 6vh) scale(0.95) rotate(90deg); }
+}
+
+@keyframes aurora-drift-2 {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50%  { transform: translate(-10vw, -8vh) scale(1.2) rotate(-35deg); }
+  100% { transform: translate(5vw, 12vh) scale(0.9) rotate(-70deg); }
+}
+
+@keyframes aurora-drift-3 {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50%  { transform: translate(-8vw, -12vh) scale(1.1) rotate(60deg); }
+  100% { transform: translate(12vw, 4vh) scale(1.05) rotate(120deg); }
+}
+
+@keyframes aurora-drift-4 {
+  0%   { transform: translate(0, 0) scale(0.9) rotate(0deg); }
+  50%  { transform: translate(6vw, -6vh) scale(1.25) rotate(-45deg); }
+  100% { transform: translate(-6vw, 8vh) scale(1) rotate(-90deg); }
+}
+
+/* Shimmer Loading Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface-subtle) 25%,
+    var(--bg-surface-hover) 50%,
+    var(--bg-surface-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+}
+
+/* Fade and Slide Entrances */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleUpFade {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--brand-glow);
+  }
+  50% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--dur-normal) var(--ease-out) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUpFade var(--dur-normal) var(--ease-spring) forwards;
+}
+
+@keyframes chunkReveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chunk-reveal {
+  animation: chunkReveal 0.4s var(--ease-spring) both;
+}
+
+/* Toast Animations */
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(30px) scale(0.95);
+  }
+}
+
+/* Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .aurora-blob,
+  .shimmer,
+  .typing-indicator span,
+  .brand-logo-mark,
+  .btn-shine,
+  .spinner,
+  .avatar i {
+    animation: none !important;
+  }
+  .chunk-card:hover,
+  .doc-item:hover,
+  .btn-primary:hover,
+  .option-card:hover,
+  .btn-primary-outline:hover {
+    transform: none !important;
+  }
+}

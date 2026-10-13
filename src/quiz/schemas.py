@@ -1,4 +1,4 @@
-﻿from typing import List, Literal, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -37,3 +37,4 @@ class QuizResponse(BaseModel):
     generated_count: int
     verified_count: int
     rejected_count: int
+    message: Optional[str] = None
