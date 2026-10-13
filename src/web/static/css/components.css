@@ -880,4 +880,97 @@
   background-color: var(--success-subtle);
 }
 
+/* ============================================================
+   IN-DOCUMENT SEARCH TOOLBAR & HIGHLIGHTS
+   ============================================================ */
+.viewer-search-toolbar {
+  padding-top: var(--space-1);
+}
+
+.doc-search-input-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  transition: all var(--dur-fast) var(--ease-standard);
+  width: 100%;
+  max-width: 480px;
+}
+
+.doc-search-input-wrapper:focus-within {
+  border-color: var(--brand-indigo);
+  background-color: var(--bg-surface);
+  box-shadow: 0 0 0 2px var(--brand-glow);
+}
+
+.doc-search-input-wrapper i.fa-magnifying-glass {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: var(--space-2);
+}
+
+#doc-search-input {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  padding: 7px 0;
+  width: 100%;
+  outline: none;
+}
+
+#doc-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.doc-search-count-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  margin-left: var(--space-2);
+}
+
+.doc-search-count-pill.has-matches {
+  background-color: var(--brand-gradient-subtle);
+  color: var(--brand-indigo);
+  border-color: var(--accent-border);
+}
+
+.doc-search-count-pill.no-matches {
+  background-color: var(--danger-subtle);
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* In-text search match highlights */
+mark.search-highlight {
+  background-color: rgba(234, 179, 8, 0.35);
+  color: inherit;
+  border-bottom: 2px solid #eab308;
+  border-radius: 2px;
+  padding: 1px 2px;
+  transition: all var(--dur-fast) ease;
+}
+
+[data-theme="dark"] mark.search-highlight {
+  background-color: rgba(234, 179, 8, 0.25);
+  border-bottom-color: #facc15;
+}
+
+mark.search-highlight.active-match {
+  background-color: rgba(168, 85, 247, 0.45);
+  border-bottom: 2px solid var(--brand-violet);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.5);
+}
+
+
 
