@@ -28,6 +28,45 @@ const btnGenerateQuiz = document.getElementById('btn-generate-quiz');
 const quizStatus = document.getElementById('quiz-status');
 const quizResults = document.getElementById('quiz-results');
 
+// Toast Notification Helper
+window.showToast = function(message, type = 'info', duration = 3500) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    let iconClass = 'fa-circle-info';
+    if (type === 'success') iconClass = 'fa-circle-check';
+    if (type === 'error') iconClass = 'fa-circle-exclamation';
+
+    toast.innerHTML = `
+        <i class="fa-solid ${iconClass} toast-icon"></i>
+        <div class="toast-message">${escapeHTML(message)}</div>
+        <button type="button" class="toast-close" aria-label="Close notification"><i class="fa-solid fa-xmark"></i></button>
+        <div class="toast-progress" style="transition: width ${duration}ms linear; width: 100%;"></div>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        const prog = toast.querySelector('.toast-progress');
+        if (prog) prog.style.width = '0%';
+    }, 20);
+
+    const closeToast = () => {
+        if (toast.classList.contains('toast-hiding')) return;
+        toast.classList.add('toast-hiding');
+        setTimeout(() => toast.remove(), 250);
+    };
+
+    const closeBtn = toast.querySelector('.toast-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeToast);
+
+    const timer = setTimeout(closeToast, duration);
+    toast.addEventListener('mouseenter', () => clearTimeout(timer));
+};
+
 // Theme Management
 function setupTheme() {
     const savedTheme = localStorage.getItem('theme');
