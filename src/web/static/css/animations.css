@@ -163,6 +163,29 @@
   animation: chunkReveal 0.4s var(--ease-spring) both;
 }
 
+/* Toast Animations */
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(30px) scale(0.95);
+  }
+}
+
 /* Respect Reduced Motion Preferences */
 @media (prefers-reduced-motion: reduce) {
   *,

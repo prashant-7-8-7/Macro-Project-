@@ -2424,6 +2424,105 @@ kbd.kbd-badge {
   color: var(--text-secondary);
 }
 
+/* ============================================================
+   TOAST NOTIFICATION SYSTEM
+   ============================================================ */
+.toast-container {
+  position: fixed;
+  top: var(--space-5);
+  right: var(--space-5);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2-5);
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  min-width: 280px;
+  max-width: 400px;
+  background-color: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl), 0 0 20px -4px var(--brand-glow);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  position: relative;
+  overflow: hidden;
+  animation: toastSlideIn var(--dur-normal) var(--ease-spring);
+  transition: all var(--dur-fast) ease;
+}
+
+.toast.toast-hiding {
+  animation: toastSlideOut var(--dur-fast) ease forwards;
+}
+
+.toast-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.toast.toast-success {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.toast.toast-success .toast-icon {
+  color: var(--success);
+}
+
+.toast.toast-error {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.toast.toast-error .toast-icon {
+  color: var(--danger);
+}
+
+.toast.toast-info {
+  border-color: rgba(124, 58, 237, 0.4);
+}
+.toast.toast-info .toast-icon {
+  color: var(--brand-violet);
+}
+
+.toast-message {
+  flex: 1;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--dur-fast) ease;
+}
+
+.toast-close:hover {
+  color: var(--text-primary);
+}
+
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2.5px;
+  background: var(--brand-gradient);
+  width: 100%;
+}
+
+
 
 
 
