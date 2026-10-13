@@ -6,11 +6,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
+import logging
 import os
 import shutil
 from pathlib import Path
 from pydantic import BaseModel
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 from src.config import UPLOAD_DIR
 from src.ingestion.pipeline import IngestionPipeline
