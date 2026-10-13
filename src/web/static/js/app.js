@@ -1313,7 +1313,7 @@ async function handleFileUpload(file) {
             const next = current + Math.floor(Math.random() * 15) + 5;
             updateProgress(
                 Math.min(next, 85),
-                next > 50 ? 'Embedding chunks on GPU...' : 'Extracting text...'
+                next > 50 ? 'Creating neural embeddings...' : 'Extracting text...'
             );
         }
     }, 600);
