@@ -356,7 +356,67 @@
     </template>
 
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Command Palette (Ctrl+K) Modal -->
+    <div id="command-palette-modal" class="palette-backdrop hidden" role="dialog" aria-modal="true" aria-label="Command Palette">
+        <div class="palette-container glass-panel">
+            <div class="palette-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="palette-search-input" placeholder="Type a command or search documents... (Esc to close)" autocomplete="off">
+                <kbd class="kbd-badge">ESC</kbd>
+            </div>
+            <div class="palette-results-list" id="palette-results-list">
+                <!-- Dynamically populated commands and documents -->
+            </div>
+            <div class="palette-footer">
+                <span><kbd class="kbd-badge">↑</kbd><kbd class="kbd-badge">↓</kbd> Navigate</span>
+                <span><kbd class="kbd-badge">↵</kbd> Select</span>
+                <span><kbd class="kbd-badge">ESC</kbd> Close</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Help Modal -->
+    <div id="shortcuts-help-modal" class="palette-backdrop hidden" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts">
+        <div class="shortcuts-container glass-panel">
+            <div class="shortcuts-header">
+                <h3><i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts</h3>
+                <button id="shortcuts-btn-close" class="btn-clear" aria-label="Close shortcuts modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="shortcuts-grid">
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Open Command Palette</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Ctrl</kbd> + <kbd class="kbd-badge">K</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Show Shortcuts Help</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">?</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Toggle Left Sidebar</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Ctrl</kbd> + <kbd class="kbd-badge">\</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Toggle Dark / Light Theme</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Ctrl</kbd> + <kbd class="kbd-badge">D</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Send AI Message</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Enter</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">New Line in Chat</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Shift</kbd> + <kbd class="kbd-badge">Enter</kbd></span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">Close Active Modal</span>
+                    <span class="shortcut-keys"><kbd class="kbd-badge">Escape</kbd></span>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Notes Modal -->
     <div id="notes-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 16px;">
