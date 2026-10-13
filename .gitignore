@@ -27,6 +27,7 @@ Thumbs.db
 
 # Temp and backup files
 *.backup
+*.local_backup
 all_work_for_chatgpt.txt
 requirements_utf8.txt
 
