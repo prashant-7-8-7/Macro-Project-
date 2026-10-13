@@ -333,7 +333,7 @@ html[data-theme="dark"] .tab-btn.active {
 
 .panel-resizer:hover .resizer-handle-pill,
 .panel-resizer.is-resizing .resizer-handle-pill {
-  background-color: #ffffff;
+  background-color: var(--brand-indigo);
 }
 
 .ai-assistant {

@@ -40,12 +40,12 @@ body {
 /* Custom Text Selection */
 ::selection {
   background-color: var(--brand-violet);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 ::-moz-selection {
   background-color: var(--brand-violet);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 /* Accessible Focus Ring */
