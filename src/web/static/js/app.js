@@ -169,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupPanelResizer();
     setupLibrarySearch();
     setupDocSearch();
+    setupDocumentViewer();
     loadDocuments();
     setupUpload();
     setupChat();
@@ -381,6 +382,65 @@ function setupDocSearch() {
     }
 }
 
+// Document Viewer Controls (Reading Progress, Scroll to Top, Copy ID)
+function setupDocumentViewer() {
+    const copyIdBtn = document.getElementById('copy-doc-id');
+    const copyIdText = document.getElementById('copy-doc-id-text');
+    const progressBar = document.getElementById('reading-progress-bar');
+    const scrollTopBtn = document.getElementById('btn-scroll-top');
+
+    // Copy Doc ID handler
+    if (copyIdBtn) {
+        copyIdBtn.addEventListener('click', () => {
+            if (!activeDocumentId) return;
+            navigator.clipboard.writeText(activeDocumentId).then(() => {
+                copyIdBtn.classList.add('copied');
+                if (copyIdText) copyIdText.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyIdBtn.classList.remove('copied');
+                    if (copyIdText) copyIdText.textContent = 'Copy ID';
+                }, 2000);
+            });
+        });
+    }
+
+    // Scroll progress & Scroll-to-top handler
+    if (viewerContent) {
+        viewerContent.addEventListener('scroll', () => {
+            const scrollTop = viewerContent.scrollTop;
+            const scrollHeight = viewerContent.scrollHeight - viewerContent.clientHeight;
+            
+            if (scrollHeight > 0) {
+                const progress = Math.min(Math.max((scrollTop / scrollHeight) * 100, 0), 100);
+                if (progressBar) {
+                    progressBar.style.width = `${progress}%`;
+                }
+            } else if (progressBar) {
+                progressBar.style.width = '0%';
+            }
+
+            // Scroll-to-top button visibility
+            if (scrollTopBtn) {
+                if (scrollTop > 180) {
+                    scrollTopBtn.classList.remove('hidden');
+                } else {
+                    scrollTopBtn.classList.add('hidden');
+                }
+            }
+        });
+    }
+
+    // Scroll-to-top button click
+    if (scrollTopBtn && viewerContent) {
+        scrollTopBtn.addEventListener('click', () => {
+            viewerContent.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+    }
+}
+
 async function openDocument(docId, filename, sizeKB) {
     activeDocumentId = docId;
     window.activeDocumentId = docId;
@@ -393,6 +453,10 @@ async function openDocument(docId, filename, sizeKB) {
     if (docSearchInput) docSearchInput.value = '';
     if (docSearchClear) docSearchClear.classList.add('hidden');
     if (docSearchCount) docSearchCount.classList.add('hidden');
+
+    // Reset reading progress bar
+    const progressBar = document.getElementById('reading-progress-bar');
+    if (progressBar) progressBar.style.width = '0%';
     
     // Update Sidebar Selection
     document.querySelectorAll('.doc-item').forEach(el => el.classList.remove('active'));
