@@ -981,10 +981,39 @@ async function handleFileUpload(file) {
 // =====================================================
 
 function setupQuiz() {
+    setupSegmentedControls();
     if (!btnGenerateQuiz) return;
-
     btnGenerateQuiz.addEventListener('click', generateQuiz);
 }
+
+function setupSegmentedControls() {
+    const countBtns = document.querySelectorAll('#quiz-count-segments .segment-btn');
+    countBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            countBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (quizQuestionCount) {
+                quizQuestionCount.value = btn.dataset.value;
+            }
+        });
+    });
+
+    const diffBtns = document.querySelectorAll('#quiz-difficulty-segments .segment-btn');
+    diffBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            diffBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (quizDifficulty) {
+                quizDifficulty.value = btn.dataset.value;
+            }
+        });
+    });
+}
+
+// Global Quiz State
+window.currentQuizQuestions = [];
+window.quizUserAnswers = {};
+window.currentQuizIndex = 0;
 
 async function generateQuiz() {
     if (!activeDocumentId) {
@@ -1000,11 +1029,13 @@ async function generateQuiz() {
     quizResults.classList.add('hidden');
 
     showQuizStatus(
-        `<div class="spinner"></div> Generating and verifying your quiz...`,
+        `<div class="spinner"></div> Generating and verifying your quiz with AI...`,
         "loading"
     );
 
     btnGenerateQuiz.disabled = true;
+    btnGenerateQuiz.classList.add('is-loading');
+    btnGenerateQuiz.innerHTML = '<span class="btn-shine"></span><i class="fa-solid fa-spinner"></i> <span>Generating...</span>';
 
     try {
         const res = await fetch(`${API_BASE_URL}/api/quiz/generate`, {
@@ -1038,6 +1069,9 @@ async function generateQuiz() {
             "success"
         );
 
+        window.currentQuizQuestions = data.questions;
+        window.quizUserAnswers = {};
+        window.currentQuizIndex = 0;
         renderQuiz(data.questions);
 
     } catch (err) {
@@ -1050,6 +1084,8 @@ async function generateQuiz() {
 
     } finally {
         btnGenerateQuiz.disabled = false;
+        btnGenerateQuiz.classList.remove('is-loading');
+        btnGenerateQuiz.innerHTML = '<span class="btn-shine"></span><i class="fa-solid fa-wand-magic-sparkles"></i> <span>Generate Quiz</span>';
     }
 }
 
