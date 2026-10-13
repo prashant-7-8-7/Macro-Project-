@@ -917,6 +917,9 @@ function renderDocumentContent(chunks, searchQuery = '') {
             if (chatInput) {
                 const preview = chunk.content.substring(0, 100).replace(/\s+/g, ' ').trim();
                 chatInput.value = `Explain this section from page ${chunk.page_number}: "${preview}..."`;
+                chatInput.style.height = '48px';
+                const newHeight = Math.min(Math.max(chatInput.scrollHeight, 48), 160);
+                chatInput.style.height = `${newHeight}px`;
                 chatInput.focus();
             }
         });
@@ -1008,10 +1011,19 @@ function setupChat() {
             }
         });
         
-        chatInput.addEventListener('input', () => {
-            chatInput.style.height = 'auto';
-            chatInput.style.height = `${Math.min(chatInput.scrollHeight, 120)}px`;
-        });
+        const autoResizeChatInput = () => {
+            chatInput.style.height = '48px';
+            const scrollH = chatInput.scrollHeight;
+            const newHeight = Math.min(Math.max(scrollH, 48), 160);
+            chatInput.style.height = `${newHeight}px`;
+            if (scrollH > 160) {
+                chatInput.style.overflowY = 'auto';
+            } else {
+                chatInput.style.overflowY = 'hidden';
+            }
+        };
+
+        chatInput.addEventListener('input', autoResizeChatInput);
     }
 
     // Suggested Question Chips Click Handler
@@ -1021,7 +1033,9 @@ function setupChat() {
             const query = chip.dataset.query;
             if (query && activeDocumentId) {
                 chatInput.value = query;
-                chatInput.style.height = 'auto';
+                chatInput.style.height = '48px';
+                const newHeight = Math.min(Math.max(chatInput.scrollHeight, 48), 160);
+                chatInput.style.height = `${newHeight}px`;
                 handleSendChat();
             } else if (!activeDocumentId) {
                 alert('Please select a document first.');
@@ -1078,7 +1092,8 @@ async function handleSendChat() {
     window.lastUserQuestion = text;
     chatInput.value = '';
     // Auto reset textarea height if resized
-    chatInput.style.height = 'auto';
+    chatInput.style.height = '48px';
+    chatInput.style.overflowY = 'hidden';
     appendMessage('user', text);
     showTypingIndicator();
     
