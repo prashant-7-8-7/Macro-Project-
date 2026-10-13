@@ -118,10 +118,21 @@
                 <!-- Center Column: Document & Quiz Tabs Workspace -->
                 <div class="workspace-center-column">
                     <header class="viewer-header">
+                        <!-- Reading Progress Bar -->
+                        <div class="reading-progress-track" aria-hidden="true">
+                            <div id="reading-progress-bar" class="reading-progress-fill"></div>
+                        </div>
+
                         <div class="viewer-header-top">
                             <div class="viewer-title-group">
                                 <h2 id="viewer-title">Document Title</h2>
-                                <div class="viewer-meta" id="viewer-meta">PDF • 2 pages</div>
+                                <div class="viewer-meta-row">
+                                    <span id="viewer-meta" class="viewer-meta">PDF • 2 pages</span>
+                                    <button id="copy-doc-id" class="chip-copy-id" title="Click to copy full Document ID">
+                                        <i class="fa-solid fa-fingerprint"></i>
+                                        <span id="copy-doc-id-text">Copy ID</span>
+                                    </button>
+                                </div>
                             </div>
                             <!-- Workspace Navigation Tabs -->
                             <nav class="workspace-tabs" role="tablist" aria-label="Workspace Views">
@@ -139,6 +150,16 @@
                                 </button>
                             </nav>
                         </div>
+
+                        <!-- In-Document Search Toolbar -->
+                        <div class="viewer-search-toolbar" id="doc-search-toolbar">
+                            <div class="doc-search-input-wrapper">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="doc-search-input" placeholder="Search inside this document..." autocomplete="off">
+                                <span id="doc-search-count" class="doc-search-count-pill hidden">0 matches</span>
+                                <button id="doc-search-clear" class="btn-clear hidden" aria-label="Clear in-document search"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
                     </header>
 
                     <!-- Tab Panel 1: Document Chunks Viewer -->
@@ -150,6 +171,10 @@
                                 <div class="line"></div>
                             </div>
                         </div>
+                        <!-- Floating Scroll To Top Button -->
+                        <button id="btn-scroll-top" class="btn-scroll-top hidden" title="Scroll to top" aria-label="Scroll to top">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </button>
                     </section>
 
                     <!-- Tab Panel 2: Quiz Maker -->
