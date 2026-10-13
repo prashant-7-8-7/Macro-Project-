@@ -167,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupWorkspaceTabs();
     setupSidebarToggle();
     setupPanelResizer();
+    setupLibrarySearch();
     loadDocuments();
     setupUpload();
     setupChat();
@@ -210,39 +211,98 @@ async function summarizeDocument(docId) {
     return await res.json();
 }
 
+// Global Document Cache for Real-Time Search
+window.allDocuments = [];
+
+// Helper: Determine specific file type icon and color class
+function getFileTypeIconInfo(filename, fileType) {
+    const ext = (filename || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf' || fileType === 'pdf') {
+        return { icon: 'fa-file-pdf', colorClass: 'doc-icon-pdf' };
+    }
+    if (['doc', 'docx'].includes(ext)) {
+        return { icon: 'fa-file-word', colorClass: 'doc-icon-word' };
+    }
+    if (['txt', 'md', 'markdown'].includes(ext)) {
+        return { icon: 'fa-file-lines', colorClass: 'doc-icon-txt' };
+    }
+    if (['csv', 'xlsx', 'xls'].includes(ext)) {
+        return { icon: 'fa-file-excel', colorClass: 'doc-icon-txt' };
+    }
+    if (['json', 'py', 'js', 'html', 'css', 'sql'].includes(ext)) {
+        return { icon: 'fa-file-code', colorClass: 'doc-icon-code' };
+    }
+    return { icon: 'fa-file-lines', colorClass: 'doc-icon-default' };
+}
+
 // --- UI Logic ---
 async function loadDocuments() {
+    // Show Skeleton Shimmer while loading
+    if (documentsList && window.allDocuments.length === 0) {
+        documentsList.innerHTML = `
+            <li class="doc-skeleton-item shimmer"></li>
+            <li class="doc-skeleton-item shimmer"></li>
+            <li class="doc-skeleton-item shimmer"></li>
+            <li class="doc-skeleton-item shimmer"></li>
+        `;
+    }
     try {
         const docs = await fetchDocuments();
-        renderDocumentsList(docs);
+        window.allDocuments = docs || [];
+        renderDocumentsList(window.allDocuments);
     } catch (err) {
         console.error("Error loading documents:", err);
+        if (documentsList) {
+            documentsList.innerHTML = '<li class="library-empty"><p style="color:var(--danger)">Failed to load library</p></li>';
+        }
     }
 }
 
 function renderDocumentsList(docs) {
+    if (!documentsList) return;
     documentsList.innerHTML = '';
+    
+    // Update count badge
+    const countBadge = document.getElementById('documents-count');
+    if (countBadge) {
+        countBadge.textContent = docs ? docs.length : 0;
+    }
+
+    const emptyLibraryEl = document.getElementById('library-empty-state');
+
+    if (!docs || docs.length === 0) {
+        if (emptyLibraryEl) emptyLibraryEl.classList.remove('hidden');
+        return;
+    }
+
+    if (emptyLibraryEl) emptyLibraryEl.classList.add('hidden');
+
     docs.forEach(doc => {
         const li = document.createElement('li');
         li.className = `doc-item ${doc.id === activeDocumentId ? 'active' : ''}`;
         
         const sizeKB = (doc.file_size / 1024).toFixed(1);
+        const iconInfo = getFileTypeIconInfo(doc.filename, doc.file_type);
         
         li.innerHTML = `
-            <div class="doc-title">
-                <i class="fa-solid fa-file-${doc.file_type === 'pdf' ? 'pdf' : 'lines'}"></i> 
-                ${doc.filename}
+            <div class="doc-title" title="${escapeHTML(doc.filename)}">
+                <i class="fa-solid ${iconInfo.icon} ${iconInfo.colorClass}"></i> 
+                <span>${escapeHTML(doc.filename)}</span>
             </div>
             <div class="doc-meta">
                 <span>${sizeKB} KB</span>
-                <button class="delete-btn" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                <button class="delete-btn" title="Delete document" aria-label="Delete ${escapeHTML(doc.filename)}">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
             </div>
         `;
         
         li.addEventListener('click', (e) => {
             if (e.target.closest('.delete-btn')) {
                 e.stopPropagation();
-                if (confirm(`Delete ${doc.filename}?`)) deleteDocument(doc.id);
+                if (confirm(`Delete "${doc.filename}" from library?`)) {
+                    deleteDocument(doc.id);
+                }
             } else {
                 openDocument(doc.id, doc.filename, sizeKB);
             }
@@ -250,6 +310,45 @@ function renderDocumentsList(docs) {
         
         documentsList.appendChild(li);
     });
+}
+
+// Real-Time Library Search Filtering
+function setupLibrarySearch() {
+    const searchInput = document.getElementById('library-search-input');
+    const searchClear = document.getElementById('library-search-clear');
+
+    if (!searchInput) return;
+
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim().toLowerCase();
+        
+        if (searchClear) {
+            if (query) {
+                searchClear.classList.remove('hidden');
+            } else {
+                searchClear.classList.add('hidden');
+            }
+        }
+
+        if (!query) {
+            renderDocumentsList(window.allDocuments);
+            return;
+        }
+
+        const filtered = window.allDocuments.filter(doc => 
+            (doc.filename || '').toLowerCase().includes(query)
+        );
+        renderDocumentsList(filtered);
+    });
+
+    if (searchClear) {
+        searchClear.addEventListener('click', () => {
+            searchInput.value = '';
+            searchClear.classList.add('hidden');
+            renderDocumentsList(window.allDocuments);
+            searchInput.focus();
+        });
+    }
 }
 
 async function openDocument(docId, filename, sizeKB) {
@@ -426,20 +525,25 @@ function renderCitations(citations) {
 
 // --- Upload Logic ---
 function setupUpload() {
+    if (!uploadZone || !fileInput) return;
+
     uploadZone.addEventListener('click', () => fileInput.click());
     
     uploadZone.addEventListener('dragover', (e) => {
         e.preventDefault();
-        uploadZone.querySelector('.upload-prompt').style.borderColor = 'var(--accent)';
+        uploadZone.classList.add('drag-over');
     });
     
-    uploadZone.addEventListener('dragleave', () => {
-        uploadZone.querySelector('.upload-prompt').style.borderColor = 'var(--border)';
+    uploadZone.addEventListener('dragleave', (e) => {
+        // Prevent child elements from flickering dragleave
+        if (!uploadZone.contains(e.relatedTarget)) {
+            uploadZone.classList.remove('drag-over');
+        }
     });
     
     uploadZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        uploadZone.querySelector('.upload-prompt').style.borderColor = 'var(--border)';
+        uploadZone.classList.remove('drag-over');
         if (e.dataTransfer.files.length) {
             handleFileUpload(e.dataTransfer.files[0]);
         }
@@ -456,8 +560,33 @@ async function handleFileUpload(file) {
     const formData = new FormData();
     formData.append('file', file);
     
-    uploadZone.querySelector('.upload-prompt').classList.add('hidden');
-    uploadProgress.classList.remove('hidden');
+    const uploadPrompt = uploadZone.querySelector('.upload-prompt');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressPercent = document.getElementById('upload-progress-percent');
+    const progressText = document.getElementById('upload-progress-text');
+
+    if (uploadPrompt) uploadPrompt.classList.add('hidden');
+    if (uploadProgress) uploadProgress.classList.remove('hidden');
+
+    const updateProgress = (pct, text) => {
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (progressPercent) progressPercent.textContent = `${pct}%`;
+        if (progressText && text) progressText.textContent = text;
+    };
+
+    updateProgress(20, 'Uploading file...');
+
+    // Simulate progressive processing feedback
+    const progressInterval = setInterval(() => {
+        const current = parseInt(progressPercent ? progressPercent.textContent : '20');
+        if (current < 85) {
+            const next = current + Math.floor(Math.random() * 15) + 5;
+            updateProgress(
+                Math.min(next, 85),
+                next > 50 ? 'Embedding chunks on GPU...' : 'Extracting text...'
+            );
+        }
+    }, 600);
     
     try {
         const res = await fetch(`${API_BASE_URL}/api/upload`, {
@@ -465,19 +594,29 @@ async function handleFileUpload(file) {
             body: formData
         });
         
+        clearInterval(progressInterval);
+
         if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
             throw new Error(errData.detail || "Upload failed");
         }
         
+        updateProgress(100, '✓ Ingestion complete!');
+        await new Promise(r => setTimeout(r, 400));
         await loadDocuments();
         
     } catch (err) {
+        clearInterval(progressInterval);
+        console.error("Upload error:", err);
+        // Visual error shake
+        uploadZone.classList.add('shake');
+        setTimeout(() => uploadZone.classList.remove('shake'), 500);
         alert("Error uploading file: " + err.message);
     } finally {
-        uploadProgress.classList.add('hidden');
-        uploadZone.querySelector('.upload-prompt').classList.remove('hidden');
-        fileInput.value = ''; // reset
+        if (uploadProgress) uploadProgress.classList.add('hidden');
+        if (uploadPrompt) uploadPrompt.classList.remove('hidden');
+        if (fileInput) fileInput.value = ''; // reset
+        if (progressBar) progressBar.style.width = '0%';
     }
 }
 // =====================================================
