@@ -1719,6 +1719,10 @@ function renderQuizResultsSummary(correctCount, total) {
 
 // Lightweight vanilla canvas confetti burst
 function triggerConfettiBurst() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return;
+    }
+
     const canvas = document.createElement('canvas');
     canvas.style.position = 'fixed';
     canvas.style.top = '0';

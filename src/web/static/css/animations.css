@@ -191,12 +191,25 @@
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
-  .aurora-blob {
+  .aurora-blob,
+  .shimmer,
+  .typing-indicator span,
+  .brand-logo-mark,
+  .btn-shine,
+  .spinner,
+  .avatar i {
     animation: none !important;
+  }
+  .chunk-card:hover,
+  .doc-item:hover,
+  .btn-primary:hover,
+  .option-card:hover,
+  .btn-primary-outline:hover {
+    transform: none !important;
   }
 }
