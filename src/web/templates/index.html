@@ -16,7 +16,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Immediate Theme Initialization to Prevent Flash of Wrong Theme -->
@@ -162,6 +162,10 @@
                                 <h2 id="viewer-title">Document Title</h2>
                                 <div class="viewer-meta-row">
                                     <span id="viewer-meta" class="viewer-meta">PDF • 2 pages</span>
+                                    <span id="viewer-lang-badge" class="badge badge-subtle hidden" title="Detected Language">
+                                        <i class="fa-solid fa-language"></i>
+                                        <span id="viewer-lang-text">EN</span>
+                                    </span>
                                     <button id="copy-doc-id" class="chip-copy-id" title="Click to copy full Document ID">
                                         <i class="fa-solid fa-fingerprint"></i>
                                         <span id="copy-doc-id-text">Copy ID</span>
@@ -178,7 +182,7 @@
                                     <i class="fa-solid fa-graduation-cap"></i>
                                     <span>Quiz Maker</span>
                                 </button>
-                                <button id="tab-btn-notes" class="tab-btn" role="tab" aria-selected="false">
+                                <button id="tab-btn-notes" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-panel-notes">
                                     <i class="fa-solid fa-pen-nib"></i>
                                     <span>Study Notes</span>
                                 </button>
@@ -189,7 +193,7 @@
                         <div class="viewer-search-toolbar" id="doc-search-toolbar" role="search" aria-label="Document text search">
                             <div class="doc-search-input-wrapper">
                                 <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                                <input type="text" id="doc-search-input" placeholder="Search inside this document..." autocomplete="off" aria-label="Search inside this document">
+                                <input type="text" id="doc-search-input" dir="auto" placeholder="Search inside this document..." autocomplete="off" aria-label="Search inside this document">
                                 <span id="doc-search-count" class="doc-search-count-pill hidden">0 matches</span>
                                 <button id="doc-search-clear" class="btn-clear hidden" aria-label="Clear in-document search"><i class="fa-solid fa-xmark"></i></button>
                             </div>
@@ -277,6 +281,83 @@
                             <!-- Questions inserted by JavaScript -->
                         </div>
                     </section>
+
+                    <!-- Tab Panel 3: Study Notes -->
+                    <section id="tab-panel-notes" class="tab-panel quiz-maker hidden" role="tabpanel" aria-labelledby="tab-btn-notes">
+                        <header class="quiz-header">
+                            <div>
+                                <h3>
+                                    <i class="fa-solid fa-pen-nib"></i>
+                                    Study Notes
+                                </h3>
+                                <p>
+                                    Structured, comprehensive study notes scaling with your document length.
+                                </p>
+                            </div>
+                            <div class="assistant-actions" style="margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                                <!-- Detail Level Selector -->
+                                <div class="notes-control-group" style="display:flex;align-items:center;gap:6px;">
+                                    <label for="notes-detail-select" style="font-size:0.82rem;font-weight:600;color:var(--text-secondary);">Detail:</label>
+                                    <select id="notes-detail-select" class="notes-select" style="background:var(--bg-surface-elevated);color:var(--text-primary);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:6px 10px;font-size:0.82rem;cursor:pointer;">
+                                        <option value="brief">Brief (~5%)</option>
+                                        <option value="standard" selected>Standard (~12-15%)</option>
+                                        <option value="detailed">Detailed (~25%)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Notes Language Selector -->
+                                <div class="notes-control-group" id="notes-lang-control-group" style="display:flex;align-items:center;gap:6px;">
+                                    <label for="notes-lang-select" style="font-size:0.82rem;font-weight:600;color:var(--text-secondary);"><i class="fa-solid fa-language"></i> Language:</label>
+                                    <select id="notes-lang-select" class="notes-select" style="background:var(--bg-surface-elevated);color:var(--text-primary);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:6px 10px;font-size:0.82rem;cursor:pointer;">
+                                        <option value="en">English</option>
+                                    </select>
+                                </div>
+
+                                <button id="tab-btn-generate-notes" class="btn-primary" title="Generate comprehensive study notes">
+                                    <span class="btn-shine"></span>
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    <span>Make Notes</span>
+                                </button>
+                                <button id="tab-btn-copy-notes" class="btn-primary-outline" title="Copy notes to clipboard" style="display:none;">
+                                    <i class="fa-solid fa-copy"></i>
+                                    <span>Copy notes</span>
+                                </button>
+                                <button id="tab-btn-download-notes" class="btn-primary-outline" title="Download notes as Markdown file" style="display:none;">
+                                    <i class="fa-solid fa-download"></i>
+                                    <span>Download notes (.md)</span>
+                                </button>
+                                <button id="tab-btn-print-notes" class="btn-primary-outline" title="Print or Save PDF">
+                                    <i class="fa-solid fa-print"></i>
+                                    <span>Print</span>
+                                </button>
+                            </div>
+                        </header>
+
+                        <!-- Background Job Progress Bar (reusing existing progress styles) -->
+                        <div id="notes-progress-container" class="upload-progress" style="display:none;padding:16px 20px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);margin-bottom:14px;">
+                            <div class="upload-progress-header" style="margin-bottom:6px;">
+                                <span id="notes-progress-status" style="display:flex;align-items:center;gap:8px;">
+                                    <i class="fa-solid fa-spinner fa-spin" style="color:var(--brand-teal);"></i>
+                                    <span id="notes-progress-text" style="font-weight:600;color:var(--text-primary);">Reading section 1 of 12...</span>
+                                </span>
+                                <span id="notes-progress-pct" style="font-weight:700;color:var(--brand-teal);">0%</span>
+                            </div>
+                            <div class="upload-progress-bar-track" style="height:8px;margin-top:4px;">
+                                <div id="notes-progress-fill" class="upload-progress-bar-fill" style="width:0%;"></div>
+                            </div>
+                            <div id="notes-progress-message" style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Processing sections with smart rate-limit management...</div>
+                        </div>
+
+                        <!-- Notes container in tab -->
+                        <div id="tab-notes-container" style="overflow-y:auto;display:flex;flex-direction:column;gap:16px;">
+                            <div id="tab-notes-empty" style="text-align:center;padding:48px 16px;color:var(--text-muted);background:var(--bg-surface);border:1px dashed var(--border-subtle);border-radius:var(--radius-lg);">
+                                <i class="fa-solid fa-book-open" style="font-size:2.5rem;margin-bottom:12px;opacity:0.6;color:var(--brand-teal);"></i>
+                                <p style="font-size:1.1rem;font-weight:600;margin-bottom:6px;color:var(--text-primary);">Ready to create your Study Notes</p>
+                                <p style="font-size:0.88rem;max-width:440px;margin:0 auto 18px;color:var(--text-secondary);">Click "Make Notes" to extract key concepts, formulas, definitions, and examples across all pages.</p>
+                            </div>
+                            <div id="tab-notes-notebook"></div>
+                        </div>
+                    </section>
             </div> <!-- /workspace-center-column -->
 
             <!-- Drag Handle for Resizing AI Panel -->
@@ -333,6 +414,7 @@
 
                     <div class="input-wrapper">
                         <textarea id="chat-input"
+                                  dir="auto"
                                   placeholder="Ask a question about this document... (Shift+Enter for newline)"
                                   aria-label="Ask a question about this document"
                                   rows="1"
@@ -436,6 +518,8 @@
         <div style="max-width:860px;margin:0 auto;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
                 <div style="display:flex;gap:10px;">
+                    <button id="notes-btn-copy" style="background:var(--bg-surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:10px 18px;color:var(--text-primary);font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">📋 Copy notes</button>
+                    <button id="notes-btn-download" style="background:var(--bg-surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:10px 18px;color:var(--text-primary);font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">⬇ Download (.md)</button>
                     <button id="notes-btn-print" style="background:var(--success);border:none;border-radius:var(--radius-md);padding:10px 18px;color:var(--text-on-accent);font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">🖨 Print / Save PDF</button>
                 </div>
                 <button id="notes-btn-close" style="background:var(--bg-surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:10px 18px;color:var(--text-primary);font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">✕ Close</button>
@@ -527,7 +611,147 @@
     .nf-orange.nf-num{background:#e65100;color:#fff} .nf-orange .nf-heading{color:#e65100;border-bottom-color:#e65100} .nf-orange .nf-bullets li::before{color:#e65100} .nf-orange .nf-key{color:#e65100;background:#fff3e0}
     .nf-purple.nf-num{background:#6a1b9a;color:#fff} .nf-purple .nf-heading{color:#6a1b9a;border-bottom-color:#6a1b9a} .nf-purple .nf-bullets li::before{color:#6a1b9a} .nf-purple .nf-key{color:#6a1b9a;background:#f3e5f5}
     .nf-teal  .nf-num{background:#00695c;color:#fff} .nf-teal  .nf-heading{color:#00695c;border-bottom-color:#00695c} .nf-teal  .nf-bullets li::before{color:#00695c} .nf-teal  .nf-key{color:#00695c;background:#e0f2f1}
-    @media print { #notes-modal{position:relative!important;background:white!important;} #notes-btn-close,#notes-btn-print{display:none!important;} }
+
+    /* Notes Coverage & Retry Styles */
+    .nf-coverage-bar {
+        margin-top: 14px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+        font-size: 0.88rem;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .nf-coverage-success {
+        background: rgba(45, 138, 78, 0.08);
+        border: 1px solid rgba(45, 138, 78, 0.3);
+        color: #2d8a4e;
+    }
+    .nf-coverage-warning {
+        background: rgba(230, 81, 0, 0.08);
+        border: 1px solid rgba(230, 81, 0, 0.35);
+        color: #c62828;
+    }
+    .nf-coverage-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .nf-coverage-badge {
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .nf-skipped-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 8px;
+        border-top: 1px dashed rgba(230, 81, 0, 0.25);
+    }
+    .nf-skipped-text {
+        color: #d32f2f;
+        font-weight: 600;
+        font-size: 0.84rem;
+    }
+    .nf-btn-retry {
+        background: #e65100;
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 14px;
+        font-weight: 700;
+        font-size: 0.82rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: background 0.2s ease, transform 0.1s ease;
+    }
+    .nf-btn-retry:hover {
+        background: #bf360c;
+        transform: translateY(-1px);
+    }
+
+    /* Dual Language Notes Styles & Font Stack */
+    .nf-page, .nf-heading, .nf-text, .nf-bullets li, .nf-key, .nf-tip, .nf-takeaway, .nf-remember {
+        font-family: 'Patrick Hand', 'Noto Sans Devanagari', 'Noto Sans Arabic', 'Noto Sans Tamil', 'Noto Sans Bengali', 'Noto Sans', system-ui, sans-serif;
+    }
+    .nf-heading, .nf-title, .nf-num, .nf-key-title, .nf-takeaway h3, .nf-remember h3 {
+        font-family: 'Kalam', 'Noto Sans Devanagari', 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+    }
+    .nf-dual-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 1.5px dashed rgba(0, 0, 0, 0.15);
+    }
+    .nf-dual-tabs {
+        display: inline-flex;
+        background: rgba(0, 0, 0, 0.06);
+        padding: 4px;
+        border-radius: 8px;
+        gap: 4px;
+    }
+    .nf-dual-tab-btn {
+        background: transparent;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-family: var(--font-sans, -apple-system, sans-serif);
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #5a5a6e;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+    .nf-dual-tab-btn.active {
+        background: #ffffff;
+        color: #1a1a2e;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+        font-weight: 700;
+    }
+    .nf-dual-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-bottom: 24px;
+        padding-bottom: 20px;
+        border-bottom: 1.5px dashed rgba(0, 0, 0, 0.12);
+    }
+    .nf-dual-col {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .nf-dual-col-header {
+        font-family: 'Kalam', cursive;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        width: fit-content;
+        background: rgba(0, 0, 0, 0.05);
+        color: #5a5a6e;
+    }
+    @media (max-width: 768px) {
+        .nf-dual-row {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+    }
+    @media print { #notes-modal{position:relative!important;background:white!important;} #notes-btn-close,#notes-btn-print,#notes-btn-copy,#notes-btn-download,#tab-btn-print-notes,#tab-btn-copy-notes,#tab-btn-download-notes,#notes-progress-container,.nf-dual-toolbar{display:none!important;} }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

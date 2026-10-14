@@ -114,37 +114,33 @@ function setupWorkspaceTabs() {
     const tabBtnNotes = document.getElementById('tab-btn-notes');
     const panelDoc = document.getElementById('tab-panel-document');
     const panelQuiz = document.getElementById('tab-panel-quiz');
+    const panelNotes = document.getElementById('tab-panel-notes');
 
-    if (tabBtnDoc && tabBtnQuiz && panelDoc && panelQuiz) {
-        tabBtnDoc.addEventListener('click', () => {
-            tabBtnDoc.classList.add('active');
-            tabBtnDoc.setAttribute('aria-selected', 'true');
-            tabBtnQuiz.classList.remove('active');
-            tabBtnQuiz.setAttribute('aria-selected', 'false');
-
-            panelDoc.classList.remove('hidden');
-            panelQuiz.classList.add('hidden');
+    function switchWorkspaceTab(activeBtn, activePanel) {
+        [tabBtnDoc, tabBtnQuiz, tabBtnNotes].forEach(b => {
+            if (b) {
+                b.classList.toggle('active', b === activeBtn);
+                b.setAttribute('aria-selected', b === activeBtn ? 'true' : 'false');
+            }
         });
-
-        tabBtnQuiz.addEventListener('click', () => {
-            tabBtnQuiz.classList.add('active');
-            tabBtnQuiz.setAttribute('aria-selected', 'true');
-            tabBtnDoc.classList.remove('active');
-            tabBtnDoc.setAttribute('aria-selected', 'false');
-
-            panelQuiz.classList.remove('hidden');
-            panelDoc.classList.add('hidden');
+        [panelDoc, panelQuiz, panelNotes].forEach(p => {
+            if (p) {
+                p.classList.toggle('hidden', p !== activePanel);
+            }
         });
     }
 
-    if (tabBtnNotes) {
+    if (tabBtnDoc && panelDoc) {
+        tabBtnDoc.addEventListener('click', () => switchWorkspaceTab(tabBtnDoc, panelDoc));
+    }
+
+    if (tabBtnQuiz && panelQuiz) {
+        tabBtnQuiz.addEventListener('click', () => switchWorkspaceTab(tabBtnQuiz, panelQuiz));
+    }
+
+    if (tabBtnNotes && panelNotes) {
         tabBtnNotes.addEventListener('click', () => {
-            if (typeof handleMakeNotes === 'function') {
-                handleMakeNotes();
-            } else {
-                const makeNotesBtn = document.getElementById('btn-make-notes');
-                if (makeNotesBtn) makeNotesBtn.click();
-            }
+            switchWorkspaceTab(tabBtnNotes, panelNotes);
         });
     }
 }
@@ -644,14 +640,15 @@ function setupLibrarySearch() {
             return;
         }
 
+        const normQuery = (query || '').normalize('NFKC').toLowerCase();
         const filtered = window.allDocuments.filter(doc => 
-            (doc.filename || '').toLowerCase().includes(query)
+            (doc.filename || '').normalize('NFKC').toLowerCase().includes(normQuery)
         );
         renderDocumentsList(filtered);
     }, 120);
 
     searchInput.addEventListener('input', () => {
-        const query = searchInput.value.trim().toLowerCase();
+        const query = searchInput.value.trim();
         
         if (searchClear) {
             if (query) {
@@ -824,14 +821,30 @@ async function openDocument(docId, filename, sizeKB) {
     chatContainer.innerHTML = `
         <div class="chat-message ai-message">
             <div class="avatar"><i class="fa-solid fa-robot"></i></div>
-            <div class="message-content">Hello! I'm ready to answer any questions about <strong>${filename}</strong>.</div>
+            <div class="message-content" dir="auto">Hello! I'm ready to answer any questions about <strong>${filename}</strong>.</div>
         </div>
     `;
     
     // Fetch and render content
     try {
         const data = await fetchDocumentContent(docId);
-        renderDocumentContent(data.chunks);
+        window.currentDocWarning = data.warning || null;
+
+        // Show detected language badge next to Document ID
+        const langBadge = document.getElementById('viewer-lang-badge');
+        const langText = document.getElementById('viewer-lang-text');
+        const langCode = (data.language || (data.document && data.document.language) || 'en').toUpperCase();
+        window.activeDocumentLanguage = langCode.toLowerCase();
+        if (typeof updateNotesLanguageSelector === 'function') {
+            updateNotesLanguageSelector(window.activeDocumentLanguage);
+        }
+        if (langBadge && langText) {
+            langText.textContent = langCode;
+            langBadge.classList.remove('hidden');
+            langBadge.title = `Detected Language: ${langCode}`;
+        }
+
+        renderDocumentContent(data.chunks, '', data.warning);
     } catch (err) {
         viewerContent.innerHTML = `<p style="color: #ef4444;">Error loading document content.</p>`;
     }
@@ -841,31 +854,59 @@ function closeDocument() {
     activeDocumentId = null;
     window.activeDocumentId = null;
     window.activeDocumentFilename = null;
+    window.currentDocWarning = null;
+    const langBadge = document.getElementById('viewer-lang-badge');
+    if (langBadge) langBadge.classList.add('hidden');
     emptyState.classList.remove('hidden');
     documentWorkspace.classList.add('hidden');
 }
 
 // Global cache of current document chunks for in-document search
 window.currentDocChunks = [];
+window.currentDocWarning = null;
 
-function renderDocumentContent(chunks, searchQuery = '') {
+function renderDocumentContent(chunks, searchQuery = '', warning = null) {
     window.currentDocChunks = chunks || [];
+    const activeWarning = warning || window.currentDocWarning;
     viewerContent.innerHTML = '';
     
+    if (activeWarning) {
+        const warnDiv = document.createElement('div');
+        warnDiv.className = 'doc-warning-banner';
+        warnDiv.style.cssText = 'background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-md, 8px); padding: 12px 16px; margin: 12px auto 20px auto; max-width: 800px; display: flex; align-items: center; gap: 12px; color: #f59e0b;';
+        warnDiv.innerHTML = `
+            <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.25rem; flex-shrink: 0;"></i>
+            <span style="font-size: 0.9rem; font-weight: 500;">${escapeHTML(activeWarning)}</span>
+        `;
+        viewerContent.appendChild(warnDiv);
+    }
+    
     if (!chunks || chunks.length === 0) {
-        viewerContent.innerHTML = `
-            <div class="empty-state-card glass-panel" style="margin: var(--space-8) auto; max-width: 420px; text-align: center;">
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'empty-state-card glass-panel';
+        emptyDiv.style.cssText = 'margin: var(--space-8) auto; max-width: 480px; text-align: center;';
+        if (activeWarning) {
+            emptyDiv.innerHTML = `
+                <div class="empty-state-icon-wrapper" style="width: 48px; height: 48px; font-size: 1.25rem; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 style="color: #f59e0b;">Text Extraction Warning</h3>
+                <p style="margin-top: 8px;">${escapeHTML(activeWarning)}</p>
+            `;
+        } else {
+            emptyDiv.innerHTML = `
                 <div class="empty-state-icon-wrapper" style="width: 48px; height: 48px; font-size: 1.25rem;">
                     <i class="fa-regular fa-file"></i>
                 </div>
                 <h3>No Content Available</h3>
                 <p>This document appears to be empty or has no readable text chunks.</p>
-            </div>
-        `;
+            `;
+        }
+        viewerContent.appendChild(emptyDiv);
         return;
     }
     
-    const query = (searchQuery || '').trim().toLowerCase();
+    const rawQuery = (searchQuery || '').normalize('NFKC').trim();
     let totalMatches = 0;
     
     chunks.forEach((chunk, index) => {
@@ -933,17 +974,22 @@ function renderDocumentContent(chunks, searchQuery = '') {
         // Chunk Body
         const bodyDiv = document.createElement('div');
         bodyDiv.className = 'viewer-chunk-body';
+        bodyDiv.setAttribute('dir', 'auto');
         
-        let contentHtml = chunk.content;
-        if (query) {
-            // Escape special regex chars
-            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`(${escapedQuery})`, 'gi');
-            const matches = contentHtml.match(regex);
-            if (matches) {
-                totalMatches += matches.length;
+        let contentHtml = escapeHTML((chunk.content || '').normalize('NFKC'));
+        if (rawQuery) {
+            const escapedForHtml = escapeHTML(rawQuery);
+            const escapedRegex = escapedForHtml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            try {
+                const regex = new RegExp(`(${escapedRegex})`, 'giu');
+                const matches = contentHtml.match(regex);
+                if (matches) {
+                    totalMatches += matches.length;
+                }
+                contentHtml = contentHtml.replace(regex, '<mark class="search-highlight">$1</mark>');
+            } catch (e) {
+                console.warn('Unicode search regex error:', e);
             }
-            contentHtml = contentHtml.replace(regex, '<mark class="search-highlight">$1</mark>');
         }
         
         bodyDiv.innerHTML = contentHtml.replace(/\n/g, '<br>');
@@ -955,7 +1001,7 @@ function renderDocumentContent(chunks, searchQuery = '') {
         const isLongChunk = (chunk.content || '').length > 360 || (chunk.content || '').split('\n').length > 6;
         if (isLongChunk) {
             bodyDiv.classList.add('is-collapsible');
-            if (query && contentHtml.includes('<mark class="search-highlight">')) {
+            if (rawQuery && contentHtml.includes('<mark class="search-highlight">')) {
                 bodyDiv.classList.add('is-expanded');
             }
 
@@ -982,7 +1028,7 @@ function renderDocumentContent(chunks, searchQuery = '') {
     // Update search count pill if search was active
     const searchCountPill = document.getElementById('doc-search-count');
     if (searchCountPill) {
-        if (query) {
+        if (rawQuery) {
             searchCountPill.classList.remove('hidden');
             if (totalMatches > 0) {
                 searchCountPill.textContent = `${totalMatches} ${totalMatches === 1 ? 'match' : 'matches'}`;
@@ -1075,7 +1121,7 @@ function setupChat() {
                 chatContainer.innerHTML = `
                     <div class="chat-message ai-message">
                         <div class="avatar"><i class="fa-solid fa-robot"></i></div>
-                        <div class="message-content">
+                        <div class="message-content" dir="auto">
                             Hello! I'm ready to answer any questions about <strong>${filename}</strong>.
                         </div>
                     </div>
@@ -1221,7 +1267,7 @@ function appendMessage(sender, contentHTML, id = null) {
     
     div.innerHTML = `
         <div class="avatar"><i class="fa-solid ${icon}"></i></div>
-        <div class="message-content">${contentHTML}</div>
+        <div class="message-content" dir="auto">${contentHTML}</div>
     `;
     
     if (sender === 'ai' && !id) {
@@ -1326,12 +1372,15 @@ async function handleFileUpload(file) {
         
         clearInterval(progressInterval);
 
+        const uploadData = await res.json().catch(() => ({}));
         if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.detail || "Upload failed");
+            throw new Error(uploadData.detail || "Upload failed");
         }
         
         updateProgress(100, '✓ Ingestion complete!');
+        if (uploadData.warning) {
+            window.showToast(uploadData.warning, 'error', 6000);
+        }
         await new Promise(r => setTimeout(r, 400));
         await loadDocuments();
         
@@ -1530,7 +1579,7 @@ function renderQuiz(questions) {
             return `
                 <div class="quiz-option-card" data-question-index="${index}" data-option-value="${escapeHTML(rawLabel)}">
                     <div class="option-letter-badge">${letter}</div>
-                    <div class="option-text">${escapeHTML(rawLabel)}</div>
+                    <div class="option-text" dir="auto">${escapeHTML(rawLabel)}</div>
                 </div>
             `;
         }).join('');
@@ -1542,7 +1591,7 @@ function renderQuiz(questions) {
                 <span class="question-number-pill">QUESTION ${index + 1} OF ${questions.length}</span>
                 <span class="verified-badge"><i class="fa-solid fa-circle-check"></i> Verified Grounding</span>
             </div>
-            <h4 class="quiz-question">${escapeHTML(question.question)}</h4>
+            <h4 class="quiz-question" dir="auto">${escapeHTML(question.question)}</h4>
             <div class="quiz-options">
                 ${optionsHTML}
             </div>
@@ -1555,10 +1604,10 @@ function renderQuiz(questions) {
                 <button type="button" class="btn-toggle-explanation" onclick="toggleExplanation(${index})">
                     <i class="fa-solid fa-chevron-down"></i> Explanation & Source Context
                 </button>
-                <div class="quiz-explanation-body hidden" id="explanation-${index}">
+                <div class="quiz-explanation-body hidden" id="explanation-${index}" dir="auto">
                     <strong><i class="fa-solid fa-lightbulb"></i> Answer Analysis:</strong>
-                    <p style="margin:4px 0 0;">${escapeHTML(explanationText)}</p>
-                    <p style="margin:6px 0 0;font-weight:600;color:var(--brand-indigo);">Correct: ${escapeHTML(question.correct_answer)}</p>
+                    <p style="margin:4px 0 0;" dir="auto">${escapeHTML(explanationText)}</p>
+                    <p style="margin:6px 0 0;font-weight:600;color:var(--brand-indigo);" dir="auto">Correct: ${escapeHTML(question.correct_answer)}</p>
                 </div>
             </div>
         `;

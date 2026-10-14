@@ -11,12 +11,79 @@ const notesNotebook = document.getElementById('notes-notebook');
 const notesBtnClose = document.getElementById('notes-btn-close');
 const notesBtnPrint = document.getElementById('notes-btn-print');
 const notesLoadingStep = document.getElementById('notes-loading-step');
+const tabNotesNotebook = document.getElementById('tab-notes-notebook');
+const tabNotesEmpty = document.getElementById('tab-notes-empty');
+const tabBtnGenerateNotes = document.getElementById('tab-btn-generate-notes');
+const tabBtnPrintNotes = document.getElementById('tab-btn-print-notes');
+
+const LANGUAGE_DISPLAY_NAMES = {
+    'en': 'English',
+    'hi': 'Hindi',
+    'es': 'Spanish',
+    'ar': 'Arabic',
+    'zh': 'Chinese',
+    'ja': 'Japanese',
+    'fr': 'French',
+    'de': 'German',
+    'ru': 'Russian',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'bn': 'Bengali',
+    'mr': 'Marathi',
+    'gu': 'Gujarati',
+    'kn': 'Kannada',
+    'ml': 'Malayalam',
+    'pa': 'Punjabi',
+    'ur': 'Urdu',
+    'pt': 'Portuguese',
+    'it': 'Italian'
+};
+
+function updateNotesLanguageSelector(langCode) {
+    const langSelect = document.getElementById('notes-lang-select');
+    if (!langSelect) return;
+
+    const code = (langCode || 'en').toLowerCase().trim();
+    langSelect.innerHTML = '';
+
+    if (code === 'en') {
+        const opt = document.createElement('option');
+        opt.value = 'en';
+        opt.textContent = 'English';
+        langSelect.appendChild(opt);
+    } else {
+        const langName = LANGUAGE_DISPLAY_NAMES[code] || code.toUpperCase();
+
+        const optBoth = document.createElement('option');
+        optBoth.value = 'both';
+        optBoth.textContent = `Both (${langName} & English)`;
+        optBoth.selected = true;
+
+        const optOriginal = document.createElement('option');
+        optOriginal.value = 'original';
+        optOriginal.textContent = `Original (${langName})`;
+
+        const optEnglish = document.createElement('option');
+        optEnglish.value = 'en';
+        optEnglish.textContent = 'English';
+
+        langSelect.appendChild(optBoth);
+        langSelect.appendChild(optOriginal);
+        langSelect.appendChild(optEnglish);
+    }
+}
+window.updateNotesLanguageSelector = updateNotesLanguageSelector;
 
 // ── Wire up button after DOM ready ──────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    updateNotesLanguageSelector(window.activeDocumentLanguage || 'en');
+
     const btnMakeNotes = document.getElementById('btn-make-notes');
     if (btnMakeNotes) {
-        btnMakeNotes.addEventListener('click', handleMakeNotes);
+        btnMakeNotes.addEventListener('click', (e) => handleMakeNotes(e.currentTarget));
+    }
+    if (tabBtnGenerateNotes) {
+        tabBtnGenerateNotes.addEventListener('click', (e) => handleMakeNotes(e.currentTarget));
     }
     if (notesBtnClose) {
         notesBtnClose.addEventListener('click', () => {
@@ -26,6 +93,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (notesBtnPrint) {
         notesBtnPrint.addEventListener('click', () => window.print());
     }
+    if (tabBtnPrintNotes) {
+        tabBtnPrintNotes.addEventListener('click', () => window.print());
+    }
+
+    const tabBtnCopy = document.getElementById('tab-btn-copy-notes');
+    const tabBtnDownload = document.getElementById('tab-btn-download-notes');
+    const notesBtnCopy = document.getElementById('notes-btn-copy');
+    const notesBtnDownload = document.getElementById('notes-btn-download');
+
+    if (tabBtnCopy) tabBtnCopy.addEventListener('click', (e) => handleCopyNotes(e.currentTarget));
+    if (notesBtnCopy) notesBtnCopy.addEventListener('click', (e) => handleCopyNotes(e.currentTarget));
+    if (tabBtnDownload) tabBtnDownload.addEventListener('click', handleDownloadNotes);
+    if (notesBtnDownload) notesBtnDownload.addEventListener('click', handleDownloadNotes);
+
     if (notesModal) {
         notesModal.addEventListener('click', (e) => {
             if (e.target === notesModal) {
@@ -40,45 +121,139 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// ── Background Job Polling ──────────────────────────────────
+async function pollNotesJob(docId, jobId, onProgress) {
+    const baseUrl = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+    const pollInterval = 1000;
+    const maxPollAttempts = 300; // 5 minutes max
+
+    for (let i = 0; i < maxPollAttempts; i++) {
+        await sleep(pollInterval);
+        const res = await fetch(`${baseUrl}/api/documents/${docId}/notes/jobs/${jobId}`);
+        if (!res.ok) {
+            throw new Error(`Failed to check job status (HTTP ${res.status})`);
+        }
+        const job = await res.json();
+
+        if (onProgress) {
+            onProgress(job);
+        }
+
+        if (job.status === 'completed') {
+            return job.result;
+        } else if (job.status === 'failed') {
+            throw new Error(job.error || 'Notes generation failed.');
+        }
+    }
+    throw new Error('Notes generation timed out. Please try again.');
+}
+
 // ── Main handler ─────────────────────────────────────────────
-async function handleMakeNotes() {
+async function handleMakeNotes(sourceBtn) {
     const docId = window.activeDocumentId || (typeof activeDocumentId !== 'undefined' ? activeDocumentId : null);
     if (!docId) {
         alert('Please select a document from the left library first.');
         return;
     }
 
-    showNotesLoading(true);
+    const detailSelect = document.getElementById('notes-detail-select');
+    const langSelect = document.getElementById('notes-lang-select');
+    const detailLevel = detailSelect ? detailSelect.value : 'standard';
+    const notesLang = langSelect ? langSelect.value : 'original';
+
+    const tabBtnGen = document.getElementById('tab-btn-generate-notes');
+    const progressContainer = document.getElementById('notes-progress-container');
+    const progressText = document.getElementById('notes-progress-text');
+    const progressPct = document.getElementById('notes-progress-pct');
+    const progressFill = document.getElementById('notes-progress-fill');
+    const progressMsg = document.getElementById('notes-progress-message');
+
+    // Switch workspace view to Study Notes tab
+    const tabBtnNotes = document.getElementById('tab-btn-notes');
+    const panelNotes = document.getElementById('tab-panel-notes');
+    const panelDoc = document.getElementById('tab-panel-document');
+    const panelQuiz = document.getElementById('tab-panel-quiz');
+    const tabBtnDoc = document.getElementById('tab-btn-document');
+    const tabBtnQuiz = document.getElementById('tab-btn-quiz');
+
+    if (tabBtnNotes && panelNotes) {
+        [tabBtnDoc, tabBtnQuiz, tabBtnNotes].forEach(b => {
+            if (b) {
+                b.classList.toggle('active', b === tabBtnNotes);
+                b.setAttribute('aria-selected', b === tabBtnNotes ? 'true' : 'false');
+            }
+        });
+        [panelDoc, panelQuiz, panelNotes].forEach(p => {
+            if (p) p.classList.toggle('hidden', p !== panelNotes);
+        });
+    }
+
+    // Show progress bar inside tab
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        if (progressText) progressText.textContent = 'Initializing notes generation...';
+        if (progressPct) progressPct.textContent = '5%';
+        if (progressFill) progressFill.style.width = '5%';
+        if (progressMsg) progressMsg.textContent = 'Processing sections with rate-limit protection...';
+    }
+
+    if (tabBtnGen) {
+        tabBtnGen.disabled = true;
+        tabBtnGen.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Making Notes...</span>';
+    }
 
     try {
-        // Step 1: Request backend to generate notes
-        setStep('🤖 Generating notes with AI...');
         const baseUrl = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
-        const res = await fetch(`${baseUrl}/api/documents/${docId}/notes`, {
+        const res = await fetch(`${baseUrl}/api/documents/${docId}/notes?detail_level=${encodeURIComponent(detailLevel)}&language=${encodeURIComponent(notesLang)}&background=true`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                detail_level: detailLevel,
+                language: notesLang,
+                background: true
+            })
         });
+
         if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
             throw new Error(errData.detail || errData.error || `HTTP ${res.status}`);
         }
+
         const data = await res.json();
-        if (!data.notes) {
-            throw new Error(data.error || 'Failed to generate notes. Check GEMINI_API_KEY.');
+        let finalNotes = null;
+
+        if (data.job_id) {
+            const jobResult = await pollNotesJob(docId, data.job_id, (job) => {
+                if (progressText && job.current_step) progressText.textContent = job.current_step;
+                if (progressPct && job.progress_pct !== undefined) progressPct.textContent = `${job.progress_pct}%`;
+                if (progressFill && job.progress_pct !== undefined) progressFill.style.width = `${job.progress_pct}%`;
+                if (progressMsg && job.message) progressMsg.textContent = job.message;
+            });
+            finalNotes = jobResult ? jobResult.notes : null;
+        } else if (data.notes) {
+            finalNotes = data.notes;
         }
 
-        // Step 2: render
-        setStep('🎨 Rendering your handwritten notes...');
-        await sleep(300);
+        if (!finalNotes) {
+            throw new Error(data.error || 'Failed to generate study notes. Check your API key or connection.');
+        }
 
-        renderNotes(data.notes);
-        showNotesLoading(false);
-        notesModal.style.display = 'block';
+        if (progressContainer) progressContainer.style.display = 'none';
+        renderNotes(finalNotes);
+
+        if (sourceBtn && sourceBtn.id === 'btn-make-notes' && notesModal) {
+            notesModal.style.display = 'block';
+        }
 
     } catch (err) {
-        showNotesLoading(false);
+        if (progressContainer) progressContainer.style.display = 'none';
         alert('Notes Error: ' + err.message);
         console.error(err);
+    } finally {
+        if (tabBtnGen) {
+            tabBtnGen.disabled = false;
+            tabBtnGen.innerHTML = '<span class="btn-shine"></span><i class="fa-solid fa-wand-magic-sparkles"></i> <span>Make Notes</span>';
+        }
     }
 }
 
@@ -222,8 +397,27 @@ function parseJSON(raw) {
 }
 // ── Notes Renderer ───────────────────────────────────────────
 function renderNotes(data) {
-    notesNotebook.innerHTML = '';
+    if (!data) return;
+    window.activeNotesData = data;
 
+    if (tabNotesEmpty) {
+        tabNotesEmpty.style.display = 'none';
+    }
+
+    // Reveal Copy and Download buttons
+    const copyBtns = [document.getElementById('tab-btn-copy-notes'), document.getElementById('notes-btn-copy')];
+    const dlBtns = [document.getElementById('tab-btn-download-notes'), document.getElementById('notes-btn-download')];
+    copyBtns.forEach(b => { if (b) b.style.display = 'inline-flex'; });
+    dlBtns.forEach(b => { if (b) b.style.display = 'inline-flex'; });
+
+    const targets = [notesNotebook, tabNotesNotebook].filter(Boolean);
+    targets.forEach(container => {
+        container.innerHTML = '';
+        container.appendChild(createNotebookElement(data));
+    });
+}
+
+function createNotebookElement(data) {
     // Outer notebook wrapper with shadow
     const wrap = document.createElement('div');
     wrap.style.cssText = 'position:relative;filter:drop-shadow(0 16px 48px rgba(0,0,0,.5));';
@@ -242,19 +436,143 @@ function renderNotes(data) {
     page.className = 'nf-page';
     page.appendChild(spiral);
 
+    // Coverage Bar
+    const coverage = data.coverage;
+    let coverageHtml = '';
+    if (coverage) {
+        const isFull = !coverage.failed_sections || coverage.failed_sections.length === 0;
+        coverageHtml = `
+            <div class="nf-coverage-bar ${isFull ? 'nf-coverage-success' : 'nf-coverage-warning'}" id="notes-coverage-bar">
+                <div class="nf-coverage-row">
+                    <span class="nf-coverage-badge">
+                        ${isFull ? '📘' : '⚠️'} ${esc(coverage.coverage_text || '')}
+                    </span>
+                </div>
+                ${!isFull && coverage.skipped_pages_text ? `
+                    <div class="nf-skipped-row">
+                        <span class="nf-skipped-text">${esc(coverage.skipped_pages_text)}</span>
+                        <button class="nf-btn-retry" type="button" title="Retry only the skipped sections">
+                            🔄 Retry Skipped Sections (${coverage.failed_sections.length})
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
     // Header
     page.insertAdjacentHTML('beforeend', `
         <div class="nf-page-header">
             <div class="nf-subject">${esc(data.subject || 'Study Notes')} ✱</div>
             <div class="nf-title">${esc(data.title)}</div>
             ${data.quote ? `<div class="nf-quote">"${esc(data.quote)}"</div>` : ''}
+            ${coverageHtml}
         </div>
     `);
 
-    // Sections
-    data.sections.forEach((sec, i) => {
-        page.appendChild(buildSection(sec, i));
-    });
+    // Wire up retry button if present
+    const retryBtn = page.querySelector('.nf-btn-retry');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const docId = window.activeDocumentId || (typeof activeDocumentId !== 'undefined' ? activeDocumentId : null);
+            if (!docId) {
+                alert('Please select a document first.');
+                return;
+            }
+            await handleRetryFailedSections(docId, data);
+        });
+    }
+
+    // Sections (Dual View or Single View)
+    if (data.dual_notes) {
+        const origLangName = data.dual_notes.original_lang_name || 'Original';
+        const origNotes = data.dual_notes.original || data;
+        const engNotes = data.dual_notes.english || data;
+        const origSections = origNotes.sections || [];
+        const engSections = engNotes.sections || [];
+
+        // Dual Mode Toolbar
+        const dualToolbar = document.createElement('div');
+        dualToolbar.className = 'nf-dual-toolbar';
+        dualToolbar.innerHTML = `
+            <div class="nf-dual-tabs" role="tablist">
+                <button type="button" class="nf-dual-tab-btn active" data-view="both">
+                    <i class="fa-solid fa-table-columns"></i> Side-by-Side
+                </button>
+                <button type="button" class="nf-dual-tab-btn" data-view="original">
+                    <i class="fa-solid fa-language"></i> ${esc(origLangName)}
+                </button>
+                <button type="button" class="nf-dual-tab-btn" data-view="english">
+                    <i class="fa-solid fa-globe"></i> English
+                </button>
+            </div>
+        `;
+        page.appendChild(dualToolbar);
+
+        const dualContainer = document.createElement('div');
+        dualContainer.className = 'nf-dual-container';
+
+        const maxSections = Math.max(origSections.length, engSections.length);
+        const rowElements = [];
+
+        for (let i = 0; i < maxSections; i++) {
+            const origSec = origSections[i];
+            const engSec = engSections[i];
+
+            const row = document.createElement('div');
+            row.className = 'nf-dual-row';
+
+            const leftCol = document.createElement('div');
+            leftCol.className = 'nf-dual-col nf-dual-orig';
+            leftCol.setAttribute('dir', 'auto');
+            leftCol.innerHTML = `<div class="nf-dual-col-header" dir="auto">${esc(origLangName)}</div>`;
+            if (origSec) leftCol.appendChild(buildSection(origSec, i));
+
+            const rightCol = document.createElement('div');
+            rightCol.className = 'nf-dual-col nf-dual-eng';
+            rightCol.setAttribute('dir', 'auto');
+            rightCol.innerHTML = `<div class="nf-dual-col-header" dir="auto">English</div>`;
+            if (engSec) rightCol.appendChild(buildSection(engSec, i));
+
+            row.appendChild(leftCol);
+            row.appendChild(rightCol);
+            dualContainer.appendChild(row);
+            rowElements.push({ row, leftCol, rightCol });
+        }
+
+        page.appendChild(dualContainer);
+
+        dualToolbar.querySelectorAll('.nf-dual-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                dualToolbar.querySelectorAll('.nf-dual-tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const view = btn.dataset.view;
+
+                rowElements.forEach(({ row, leftCol, rightCol }) => {
+                    if (view === 'both') {
+                        row.style.gridTemplateColumns = '1fr 1fr';
+                        leftCol.style.display = 'flex';
+                        rightCol.style.display = 'flex';
+                    } else if (view === 'original') {
+                        row.style.gridTemplateColumns = '1fr';
+                        leftCol.style.display = 'flex';
+                        rightCol.style.display = 'none';
+                    } else if (view === 'english') {
+                        row.style.gridTemplateColumns = '1fr';
+                        leftCol.style.display = 'none';
+                        rightCol.style.display = 'flex';
+                    }
+                });
+            });
+        });
+    } else {
+        // Sections
+        (data.sections || []).forEach((sec, i) => {
+            page.appendChild(buildSection(sec, i));
+        });
+    }
 
     // Footer
     if ((data.keyTakeaways && data.keyTakeaways.length) || (data.remember && data.remember.length)) {
@@ -262,7 +580,72 @@ function renderNotes(data) {
     }
 
     wrap.appendChild(page);
-    notesNotebook.appendChild(wrap);
+    return wrap;
+}
+
+async function handleRetryFailedSections(docId, existingNotes) {
+    const coverage = existingNotes && existingNotes.coverage;
+    if (!coverage || !coverage.failed_sections || !coverage.failed_sections.length) {
+        return;
+    }
+
+    const sectionIndices = coverage.failed_sections.map(s => s.section_index);
+    const progressContainer = document.getElementById('notes-progress-container');
+    const progressText = document.getElementById('notes-progress-text');
+    const progressPct = document.getElementById('notes-progress-pct');
+    const progressFill = document.getElementById('notes-progress-fill');
+    const progressMsg = document.getElementById('notes-progress-message');
+
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        if (progressText) progressText.textContent = `Retrying ${sectionIndices.length} skipped section(s)...`;
+        if (progressPct) progressPct.textContent = '10%';
+        if (progressFill) progressFill.style.width = '10%';
+        if (progressMsg) progressMsg.textContent = 'Contacting AI provider with retry backoff...';
+    }
+
+    try {
+        const baseUrl = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+        const res = await fetch(`${baseUrl}/api/documents/${docId}/notes/retry?background=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                section_indices: sectionIndices,
+                existing_notes: existingNotes,
+                detail_level: existingNotes.detail_level || 'standard',
+                language: existingNotes.notes_mode === 'both' ? 'both' : (existingNotes.language || 'original')
+            })
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || errData.error || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        let updatedNotes = null;
+
+        if (data.job_id) {
+            const jobResult = await pollNotesJob(docId, data.job_id, (job) => {
+                if (progressText && job.current_step) progressText.textContent = job.current_step;
+                if (progressPct && job.progress_pct !== undefined) progressPct.textContent = `${job.progress_pct}%`;
+                if (progressFill && job.progress_pct !== undefined) progressFill.style.width = `${job.progress_pct}%`;
+                if (progressMsg && job.message) progressMsg.textContent = job.message;
+            });
+            updatedNotes = jobResult ? jobResult.notes : null;
+        } else if (data.notes) {
+            updatedNotes = data.notes;
+        }
+
+        if (updatedNotes) {
+            renderNotes(updatedNotes);
+        }
+        if (progressContainer) progressContainer.style.display = 'none';
+    } catch (err) {
+        if (progressContainer) progressContainer.style.display = 'none';
+        alert('Retry failed: ' + err.message);
+        console.error(err);
+    }
 }
 
 function buildSection(sec, idx) {
@@ -275,7 +658,7 @@ function buildSection(sec, idx) {
     wrapper.innerHTML = `
         <div class="nf-sec-header">
             <div class="nf-num">${sec.number || idx + 1}</div>
-            <div class="nf-heading">${esc(sec.heading)}</div>
+            <div class="nf-heading" dir="auto">${esc(sec.heading)}</div>
         </div>
     `;
 
@@ -300,7 +683,8 @@ function buildSection(sec, idx) {
     if (sec.tip) {
         const tip = document.createElement('div');
         tip.className = 'nf-tip';
-        tip.innerHTML = `<span>💡</span><span>${esc(sec.tip)}</span>`;
+        tip.setAttribute('dir', 'auto');
+        tip.innerHTML = `<span>💡</span><span dir="auto">${esc(sec.tip)}</span>`;
         body.appendChild(tip);
     }
 
@@ -316,6 +700,7 @@ function buildSection(sec, idx) {
 function buildText(content) {
     const p = document.createElement('p');
     p.className = 'nf-text';
+    p.setAttribute('dir', 'auto');
     p.innerHTML = esc(content).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     return p;
 }
@@ -323,8 +708,10 @@ function buildText(content) {
 function buildBullets(items) {
     const ul = document.createElement('ul');
     ul.className = 'nf-bullets';
+    ul.setAttribute('dir', 'auto');
     items.forEach(b => {
         const li = document.createElement('li');
+        li.setAttribute('dir', 'auto');
         li.innerHTML = esc(b).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         ul.appendChild(li);
     });
@@ -334,10 +721,13 @@ function buildBullets(items) {
 function buildKeyBox(kb) {
     const box = document.createElement('div');
     box.className = 'nf-key';
-    box.innerHTML = `<div class="nf-key-title">${esc(kb.title || '⭐ Key Concept')}</div>`;
+    box.setAttribute('dir', 'auto');
+    box.innerHTML = `<div class="nf-key-title" dir="auto">${esc(kb.title || '⭐ Key Concept')}</div>`;
     const ul = document.createElement('ul');
+    ul.setAttribute('dir', 'auto');
     (kb.items || []).forEach(item => {
         const li = document.createElement('li');
+        li.setAttribute('dir', 'auto');
         li.innerHTML = esc(item).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         ul.appendChild(li);
     });
@@ -348,12 +738,15 @@ function buildKeyBox(kb) {
 function buildComparison(cmp) {
     const box = document.createElement('div');
     box.className = 'nf-cmp';
+    box.setAttribute('dir', 'auto');
 
     const left = document.createElement('div');
     left.className = 'nf-cmp-col';
-    left.innerHTML = `<div class="nf-cmp-title">${esc(cmp.left.title)}</div>`;
+    left.setAttribute('dir', 'auto');
+    left.innerHTML = `<div class="nf-cmp-title" dir="auto">${esc(cmp.left.title)}</div>`;
     const lu = document.createElement('ul');
-    (cmp.left.items || []).forEach(i => { const li = document.createElement('li'); li.textContent = i; lu.appendChild(li); });
+    lu.setAttribute('dir', 'auto');
+    (cmp.left.items || []).forEach(i => { const li = document.createElement('li'); li.setAttribute('dir', 'auto'); li.textContent = i; lu.appendChild(li); });
     left.appendChild(lu);
 
     const divider = document.createElement('div');
@@ -361,9 +754,11 @@ function buildComparison(cmp) {
 
     const right = document.createElement('div');
     right.className = 'nf-cmp-col';
-    right.innerHTML = `<div class="nf-cmp-title">${esc(cmp.right.title)}</div>`;
+    right.setAttribute('dir', 'auto');
+    right.innerHTML = `<div class="nf-cmp-title" dir="auto">${esc(cmp.right.title)}</div>`;
     const ru = document.createElement('ul');
-    (cmp.right.items || []).forEach(i => { const li = document.createElement('li'); li.textContent = i; ru.appendChild(li); });
+    ru.setAttribute('dir', 'auto');
+    (cmp.right.items || []).forEach(i => { const li = document.createElement('li'); li.setAttribute('dir', 'auto'); li.textContent = i; ru.appendChild(li); });
     right.appendChild(ru);
 
     box.appendChild(left); box.appendChild(divider); box.appendChild(right);
@@ -377,9 +772,11 @@ function buildFooter(takeaways, remember) {
     if (takeaways && takeaways.length) {
         const box = document.createElement('div');
         box.className = 'nf-takeaway';
-        box.innerHTML = '<h3>✅ Key Takeaways</h3>';
+        box.setAttribute('dir', 'auto');
+        box.innerHTML = '<h3 dir="auto">✅ Key Takeaways</h3>';
         const ul = document.createElement('ul');
-        takeaways.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+        ul.setAttribute('dir', 'auto');
+        takeaways.forEach(t => { const li = document.createElement('li'); li.setAttribute('dir', 'auto'); li.textContent = t; ul.appendChild(li); });
         box.appendChild(ul);
         footer.appendChild(box);
     }
@@ -387,9 +784,11 @@ function buildFooter(takeaways, remember) {
     if (remember && remember.length) {
         const box = document.createElement('div');
         box.className = 'nf-remember';
-        box.innerHTML = '<h3>⭐ Remember</h3>';
+        box.setAttribute('dir', 'auto');
+        box.innerHTML = '<h3 dir="auto">⭐ Remember</h3>';
         const ul = document.createElement('ul');
-        remember.forEach(r => { const li = document.createElement('li'); li.textContent = r; ul.appendChild(li); });
+        ul.setAttribute('dir', 'auto');
+        remember.forEach(r => { const li = document.createElement('li'); li.setAttribute('dir', 'auto'); li.textContent = r; ul.appendChild(li); });
         box.appendChild(ul);
         footer.appendChild(box);
     }
@@ -412,3 +811,158 @@ function esc(str) {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Markdown Export & Copy / Download ────────────────────────
+function notesToMarkdown(notesData) {
+    if (!notesData) return '';
+
+    if (notesData.dual_notes) {
+        const orig = notesData.dual_notes.original || notesData;
+        const eng = notesData.dual_notes.english;
+        const origLangName = notesData.dual_notes.original_lang_name || 'Original';
+
+        return `# ${notesData.title || 'Study Notes'}
+
+> **Document:** ${notesData.title || 'Document'}
+> **Language:** Multilingual (${origLangName} & English)
+${notesData.coverage ? `> **Coverage:** ${notesData.coverage.coverage_text || ''}` : ''}
+${notesData.detail_level ? `> **Detail Level:** ${notesData.detail_level.toUpperCase()}` : ''}
+
+---
+
+# Part 1: ${origLangName} Notes
+
+${generateSingleNotesMarkdown(orig)}
+
+---
+
+# Part 2: English Notes
+
+${generateSingleNotesMarkdown(eng)}
+`;
+    }
+
+    return generateSingleNotesMarkdown(notesData);
+}
+
+function generateSingleNotesMarkdown(data) {
+    if (!data) return '';
+    let md = '';
+
+    md += `# ${data.title || 'Study Notes'}\n\n`;
+    if (data.subject) md += `**Subject / Focus:** ${data.subject}\n\n`;
+    if (data.quote) md += `> *${data.quote}*\n\n`;
+    if (data.coverage && data.coverage.coverage_text) {
+        md += `> 📌 **Coverage:** ${data.coverage.coverage_text}\n\n`;
+    }
+
+    md += `---\n\n`;
+
+    if (Array.isArray(data.sections)) {
+        data.sections.forEach(sec => {
+            const num = sec.number || '';
+            const heading = sec.heading || `Section ${num}`;
+            md += `## ${num ? num + '. ' : ''}${heading}\n\n`;
+
+            if (sec.content) {
+                md += `${sec.content}\n\n`;
+            }
+
+            if (Array.isArray(sec.bullets) && sec.bullets.length > 0) {
+                sec.bullets.forEach(b => {
+                    md += `- ${b}\n`;
+                });
+                md += '\n';
+            }
+
+            if (sec.keyBox && sec.keyBox.items && sec.keyBox.items.length > 0) {
+                md += `> **${sec.keyBox.title || '⭐ Key Concept'}:**\n`;
+                sec.keyBox.items.forEach(item => {
+                    md += `> - ${item}\n`;
+                });
+                md += '\n';
+            }
+
+            if (sec.tip) {
+                md += `> 💡 **Tip / Takeaway:** ${sec.tip}\n\n`;
+            }
+
+            md += `---\n\n`;
+        });
+    }
+
+    if (Array.isArray(data.keyTakeaways) && data.keyTakeaways.length > 0) {
+        md += `## ⭐ Key Takeaways\n\n`;
+        data.keyTakeaways.forEach(item => {
+            md += `- ${item}\n`;
+        });
+        md += '\n';
+    }
+
+    if (Array.isArray(data.remember) && data.remember.length > 0) {
+        md += `## 📌 Important Terms & Glossary\n\n`;
+        data.remember.forEach(item => {
+            md += `- ${item}\n`;
+        });
+        md += '\n';
+    }
+
+    if (Array.isArray(data.formulas) && data.formulas.length > 0) {
+        md += `## 📐 Formulas & Definitions\n\n`;
+        data.formulas.forEach(item => {
+            md += `- ${item}\n`;
+        });
+        md += '\n';
+    }
+
+    return md;
+}
+
+async function handleCopyNotes(btn) {
+    const data = window.activeNotesData;
+    if (!data) return;
+    const md = notesToMarkdown(data);
+    if (!md) return;
+
+    try {
+        await navigator.clipboard.writeText(md);
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check" style="color:var(--success);"></i> <span>Copied!</span>';
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+        }, 2000);
+    } catch (e) {
+        console.error('Failed to copy notes via clipboard API:', e);
+        const textarea = document.createElement('textarea');
+        textarea.value = md;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check" style="color:var(--success);"></i> <span>Copied!</span>';
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+        }, 2000);
+    }
+}
+
+function handleDownloadNotes() {
+    const data = window.activeNotesData;
+    if (!data) return;
+    const md = notesToMarkdown(data);
+    if (!md) return;
+
+    const rawTitle = data.title || 'Study_Notes';
+    const cleanTitle = rawTitle.replace(/[^a-zA-Z0-9_\u0900-\u097F\-]/g, '_');
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${cleanTitle}_notes.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+

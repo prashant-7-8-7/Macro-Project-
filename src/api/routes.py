@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from src.config import UPLOAD_DIR
 from src.ingestion.pipeline import IngestionPipeline
 from src.retrieval.engine import HybridSearchEngine
-from src.ai.rag import synthesize_answer, summarize_document, generate_notes
+from src.ai.rag import synthesize_answer, summarize_document, generate_notes, retry_notes
 from src.database.repository import DocumentRepository
 
 from src.database.db import init_db
@@ -165,14 +165,23 @@ async def delete_document(doc_id: str, repo: DocumentRepository = Depends(get_re
 async def get_document_content(doc_id: str, repo: DocumentRepository = Depends(get_repo)):
     try:
         chunks = repo.get_document_chunks_content(doc_id)
-        if not chunks:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        # We can also fetch the document metadata here to get the title
         docs = repo.get_all_documents()
         doc_info = next((d for d in docs if d['id'] == doc_id), None)
         
-        return {"document": doc_info, "chunks": chunks}
+        if not doc_info and not chunks:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        warning = None
+        if doc_info and doc_info.get("metadata_json"):
+            try:
+                import json
+                meta = json.loads(doc_info["metadata_json"])
+                warning = meta.get("warning")
+            except Exception:
+                pass
+        
+        lang = doc_info.get("language", "en") if doc_info else "en"
+        return {"document": doc_info, "chunks": chunks, "warning": warning, "language": lang}
     except HTTPException:
         raise
     except Exception as e:
@@ -180,9 +189,26 @@ async def get_document_content(doc_id: str, repo: DocumentRepository = Depends(g
 @app.post("/api/documents/{doc_id}/notes")
 async def create_document_notes(
     doc_id: str,
+    request: Request,
     repo: DocumentRepository = Depends(get_repo)
 ):
     try:
+        detail_level = "standard"
+        req_lang = None
+        body = {}
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                detail_level = body.get("detail_level", "standard")
+                req_lang = body.get("language") or body.get("lang")
+        except Exception:
+            body = {}
+
+        if not req_lang:
+            req_lang = request.query_params.get("lang") or request.query_params.get("language")
+        if request.query_params.get("detail_level"):
+            detail_level = request.query_params.get("detail_level")
+
         chunks = repo.get_document_chunks_content(doc_id)
 
         if not chunks:
@@ -202,8 +228,41 @@ async def create_document_notes(
             if doc_info
             else "Document Notes"
         )
+        doc_detected_lang = doc_info.get("language", "en") if doc_info else "en"
+        notes_lang = req_lang or "original"
 
-        response = generate_notes(title, chunks)
+        bg_param = request.query_params.get("background")
+        is_background = (bg_param and bg_param.lower() in ("true", "1", "yes")) or (isinstance(body, dict) and body.get("background"))
+
+        if is_background:
+            from src.ai.notes_jobs import NotesJobManager
+            job_mgr = NotesJobManager.get_instance()
+            job_id = job_mgr.create_job(
+                document_id=doc_id,
+                doc_title=title,
+                chunks=chunks,
+                detail_level=detail_level or "standard",
+                notes_language=notes_lang,
+                doc_lang=doc_detected_lang,
+                repo=repo,
+            )
+            return {
+                "job_id": job_id,
+                "document_id": doc_id,
+                "status": "running",
+                "progress_pct": 5,
+                "current_step": "Starting notes generation...",
+            }
+
+        response = generate_notes(
+            title,
+            chunks,
+            doc_lang=doc_detected_lang,
+            detail_level=detail_level or "standard",
+            notes_language=notes_lang,
+            document_id=doc_id,
+            repo=repo,
+        )
 
         return {
             "document_id": doc_id,
@@ -224,6 +283,108 @@ async def create_document_notes(
             detail=str(e)
         )
 
+
+@app.get("/api/documents/{doc_id}/notes/jobs/{job_id}")
+async def get_notes_job_status(doc_id: str, job_id: str):
+    from src.ai.notes_jobs import NotesJobManager
+    job_mgr = NotesJobManager.get_instance()
+    job = job_mgr.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Notes job not found.")
+    return job
+
+
+class RetryNotesRequest(BaseModel):
+    section_indices: List[int]
+    existing_notes: dict
+    detail_level: Optional[str] = "standard"
+    language: Optional[str] = None
+
+
+@app.post("/api/documents/{doc_id}/notes/retry")
+async def retry_document_notes_endpoint(
+    doc_id: str,
+    payload: RetryNotesRequest,
+    request: Request,
+    repo: DocumentRepository = Depends(get_repo)
+):
+    try:
+        chunks = repo.get_document_chunks_content(doc_id)
+        if not chunks:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found or contains no text."
+            )
+
+        docs = repo.get_all_documents()
+        doc_info = next(
+            (d for d in docs if d["id"] == doc_id),
+            None
+        )
+
+        title = (
+            doc_info["filename"]
+            if doc_info
+            else "Document Notes"
+        )
+        doc_lang = payload.language or (doc_info.get("language", "en") if doc_info else "en")
+        notes_lang = payload.language or payload.existing_notes.get("notes_mode")
+
+        bg_param = request.query_params.get("background")
+        is_background = bg_param and bg_param.lower() in ("true", "1", "yes")
+
+        if is_background:
+            from src.ai.notes_jobs import NotesJobManager
+            job_mgr = NotesJobManager.get_instance()
+            job_id = job_mgr.create_job(
+                document_id=doc_id,
+                doc_title=title,
+                chunks=chunks,
+                detail_level=payload.detail_level or "standard",
+                notes_language=notes_lang,
+                doc_lang=doc_lang,
+                repo=repo,
+                is_retry=True,
+                retry_section_indices=payload.section_indices,
+                existing_notes=payload.existing_notes,
+            )
+            return {
+                "job_id": job_id,
+                "document_id": doc_id,
+                "status": "running",
+                "progress_pct": 5,
+                "current_step": "Starting retry for skipped sections...",
+            }
+
+        updated_notes = retry_notes(
+            doc_title=title,
+            chunks=chunks,
+            target_section_indices=payload.section_indices,
+            existing_notes=payload.existing_notes,
+            detail_level=payload.detail_level or "standard",
+            doc_lang=doc_lang,
+            notes_language=notes_lang,
+            repo=repo,
+            document_id=doc_id,
+        )
+
+        return {
+            "document_id": doc_id,
+            "filename": title,
+            "notes": updated_notes
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Notes retry failed")
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
 @app.post("/api/documents/{doc_id}/summarize")
 async def summarize_doc(doc_id: str, repo: DocumentRepository = Depends(get_repo)):
     try:
@@ -234,8 +395,9 @@ async def summarize_doc(doc_id: str, repo: DocumentRepository = Depends(get_repo
         docs = repo.get_all_documents()
         doc_info = next((d for d in docs if d['id'] == doc_id), None)
         title = doc_info['filename'] if doc_info else "Unknown Document"
+        doc_lang = doc_info.get("language", "en") if doc_info else "en"
         
-        response = summarize_document(title, chunks)
+        response = summarize_document(title, chunks, doc_lang=doc_lang)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

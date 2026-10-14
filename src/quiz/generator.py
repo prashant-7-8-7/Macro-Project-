@@ -6,7 +6,8 @@ from typing import List, Dict
 
 from dotenv import load_dotenv
 from src.quiz.schemas import QuizQuestion
-from src.ai.rag import call_llm
+from src.ai.rag import call_llm, LANGUAGE_NAMES
+from src.ingestion.detector import detect_text_language
 
 load_dotenv()
 
@@ -36,8 +37,12 @@ def _generate_single_batch(
     batch_idx: int,
     total_batches: int,
 ) -> List[QuizQuestion]:
-    """Generate a single batch of questions using the LLM."""
+    """Generate a single batch of questions using the LLM in the document's language."""
     selected_contexts = _sample_contexts_for_batch(contexts, batch_idx, total_batches)
+
+    sample_text = " ".join(ctx.get("content", "") for ctx in selected_contexts[:3])
+    lang_code = selected_contexts[0].get("language") if selected_contexts and selected_contexts[0].get("language") else detect_text_language(sample_text)
+    lang_name = LANGUAGE_NAMES.get(lang_code, lang_code)
 
     source_text = []
     for i, ctx in enumerate(selected_contexts):
@@ -64,22 +69,25 @@ You are a question-generation component inside a document assessment system.
 Generate exactly {batch_size} multiple-choice questions from ONLY the
 provided document content.
 
+Target Language: {lang_name}
 Requested difficulty: {difficulty}
 
 Rules:
-1. Do not use outside knowledge.
-2. Every question must be answerable from the provided content.
-3. Each question must have exactly 4 options.
-4. Exactly one option must be correct.
-5. Avoid ambiguous questions.
-6. Avoid questions whose answer is not explicitly supported by the source.
-7. Do not create duplicate or nearly duplicate questions.{existing_hints}
-8. Identify the source page and source chunk ID.
-9. Classify each question with a topic.
-10. Classify each question using one Bloom level:
+1. LANGUAGE REQUIREMENT: All questions, options, topics, and explanations MUST be written in {lang_name} (the document's language). Keep JSON keys ("question", "options", "label", "is_correct", "correct_answer", "topic", "explanation", "difficulty", "bloom_level", "source_page", "source_chunk_id") in English as required by the schema.
+2. Do not use outside knowledge.
+3. Every question must be answerable from the provided content.
+4. Each question must have exactly 4 options.
+5. Exactly one option must be correct.
+6. Avoid ambiguous questions.
+7. Avoid questions whose answer is not explicitly supported by the source.
+8. Do not create duplicate or nearly duplicate questions.{existing_hints}
+9. Identify the source page and source chunk ID.
+10. Classify each question with a topic (in {lang_name}).
+11. Provide a concise explanation (in {lang_name}) justifying why the correct answer is right based on the source text.
+12. Classify each question using one Bloom level:
     Remember, Understand, Apply, Analyze.
-11. Return ONLY valid JSON array.
-12. Do not wrap the JSON in markdown.
+13. Return ONLY valid JSON array.
+14. Do not wrap the JSON in markdown.
 
 JSON format:
 
@@ -94,6 +102,7 @@ JSON format:
     ],
     "correct_answer": "...",
     "topic": "...",
+    "explanation": "...",
     "difficulty": "{difficulty}",
     "bloom_level": "Remember|Understand|Apply|Analyze",
     "source_page": 1,
@@ -106,10 +115,11 @@ DOCUMENT CONTENT:
 """
 
     logger.info(
-        "[Quiz Generator] Batch %d/%d: Requesting %d questions (difficulty=%s). Context chunks: %d, context chars: %d",
+        "[Quiz Generator] Batch %d/%d: Requesting %d questions (language=%s, difficulty=%s). Context chunks: %d, context chars: %d",
         batch_idx + 1,
         total_batches,
         batch_size,
+        lang_name,
         difficulty,
         len(selected_contexts),
         len(context_block),
@@ -148,6 +158,7 @@ DOCUMENT CONTENT:
                     options=item["options"],
                     correct_answer=item["correct_answer"],
                     topic=item.get("topic"),
+                    explanation=item.get("explanation"),
                     difficulty=item.get("difficulty", difficulty),
                     bloom_level=item.get("bloom_level"),
                     source_page=item.get("source_page"),

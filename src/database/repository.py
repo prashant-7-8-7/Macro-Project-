@@ -4,25 +4,43 @@ from typing import List, Dict, Any, Optional
 from src.database.db import get_connection
 
 class DocumentRepository:
-    def __init__(self):
-        pass
+    _migrated = False
 
-    def insert_document(self, doc_id: str, title: str, filename: str, file_type: str, file_size: int, doc_hash: str, metadata: dict) -> bool:
-        """Inserts a new document. Returns True if inserted, False if hash already exists (duplicate)."""
+    def __init__(self):
+        if not DocumentRepository._migrated:
+            try:
+                conn = get_connection()
+                from src.database.db import migrate_db
+                migrate_db(conn)
+                conn.close()
+                DocumentRepository._migrated = True
+            except Exception:
+                pass
+
+    def insert_document(self, doc_id: str, title: str, filename: str, file_type: str, file_size: int, doc_hash: str, metadata: dict, language: str = 'en') -> bool:
+        """Inserts a new document with detected language. Returns True if inserted, False if hash already exists (duplicate)."""
         conn = get_connection()
         try:
             conn.execute(
                 """
-                INSERT INTO documents (id, title, filename, file_type, file_size, doc_hash, metadata_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO documents (id, title, filename, file_type, file_size, doc_hash, language, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (doc_id, title, filename, file_type, file_size, doc_hash, json.dumps(metadata))
+                (doc_id, title, filename, file_type, file_size, doc_hash, language, json.dumps(metadata))
             )
             conn.commit()
             return True
         except sqlite3.IntegrityError:
             conn.rollback()
             return False # doc_hash is UNIQUE
+        finally:
+            conn.close()
+
+    def update_document_language(self, doc_id: str, language: str):
+        conn = get_connection()
+        try:
+            conn.execute("UPDATE documents SET language = ? WHERE id = ?", (language, doc_id))
+            conn.commit()
         finally:
             conn.close()
             
@@ -43,6 +61,21 @@ class DocumentRepository:
                 VALUES (:id, :document_id, :chunk_index, :content, :token_count, :page_number, :embedding)
                 """,
                 chunks
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def update_chunk_embeddings(self, chunk_updates: List[Tuple[bytes, str]]):
+        """Batch updates embeddings for existing chunks: list of (embedding_blob, chunk_id)."""
+        conn = get_connection()
+        try:
+            conn.executemany(
+                "UPDATE document_chunks SET embedding = ? WHERE id = ?",
+                chunk_updates
             )
             conn.commit()
         except Exception as e:
@@ -134,3 +167,82 @@ class DocumentRepository:
             raise e
         finally:
             conn.close()
+
+    # Notes Section Caching for Map-Reduce Scaling
+    def get_cached_note_section(
+        self, document_id: str, section_index: int, detail_level: str, language: str
+    ) -> Optional[dict]:
+        """Fetches a previously processed section note from cache."""
+        conn = get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT content_json FROM notes_section_cache
+                WHERE document_id = ? AND section_index = ? AND detail_level = ? AND language = ?
+                """,
+                (document_id, section_index, detail_level, language)
+            )
+            row = cursor.fetchone()
+            if row:
+                return json.loads(row["content_json"])
+            return None
+        finally:
+            conn.close()
+
+    def set_cached_note_section(
+        self, document_id: str, section_index: int, detail_level: str, language: str, content: dict
+    ):
+        """Caches a finished section note keyed by document id + section + detail level + language."""
+        conn = get_connection()
+        try:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO notes_section_cache (document_id, section_index, detail_level, language, content_json, created_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (document_id, section_index, detail_level, language, json.dumps(content))
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_all_cached_note_sections(
+        self, document_id: str, detail_level: str, language: str
+    ) -> Dict[int, dict]:
+        """Fetches all cached section notes for a document at given detail level and language."""
+        conn = get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT section_index, content_json FROM notes_section_cache
+                WHERE document_id = ? AND detail_level = ? AND language = ?
+                ORDER BY section_index ASC
+                """,
+                (document_id, detail_level, language)
+            )
+            return {r["section_index"]: json.loads(r["content_json"]) for r in cursor.fetchall()}
+        finally:
+            conn.close()
+
+    def clear_note_sections_cache(
+        self, document_id: str, detail_level: Optional[str] = None, language: Optional[str] = None
+    ):
+        """Clears cached sections for a document, optionally scoped to detail level and language."""
+        conn = get_connection()
+        try:
+            if detail_level and language:
+                conn.execute(
+                    "DELETE FROM notes_section_cache WHERE document_id = ? AND detail_level = ? AND language = ?",
+                    (document_id, detail_level, language)
+                )
+            elif detail_level:
+                conn.execute(
+                    "DELETE FROM notes_section_cache WHERE document_id = ? AND detail_level = ?",
+                    (document_id, detail_level)
+                )
+            else:
+                conn.execute("DELETE FROM notes_section_cache WHERE document_id = ?", (document_id,))
+            conn.commit()
+        finally:
+            conn.close()
+

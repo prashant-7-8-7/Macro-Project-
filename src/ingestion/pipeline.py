@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from src.ingestion.parsers import DocumentParser
+from src.ingestion.detector import detect_document_language
 from src.ingestion.chunker import TextChunker
 from src.ai.embeddings import EmbeddingEngine
 from src.ai.vector_math import serialize_embedding
@@ -48,7 +49,16 @@ class IngestionPipeline:
         
         # 1. Parse Document
         logger.info(f"Parsing document: {path.name}")
-        pages = DocumentParser.parse(str(path))
+        pages, doc_warning = DocumentParser.parse(str(path))
+        
+        # 1b. Language Detection
+        detected_lang = detect_document_language(pages)
+        logger.info(f"Detected document language: {detected_lang}")
+        
+        doc_metadata = dict(metadata or {})
+        doc_metadata["language"] = detected_lang
+        if doc_warning:
+            doc_metadata["warning"] = doc_warning
         
         # 2. Chunking
         logger.info(f"Chunking document...")
@@ -56,6 +66,24 @@ class IngestionPipeline:
         
         if not chunks:
             logger.warning(f"No text extracted from {path.name}")
+            if doc_warning:
+                self.repo.insert_document(
+                    doc_id=doc_id,
+                    title=title,
+                    filename=path.name,
+                    file_type=file_type,
+                    file_size=file_size,
+                    doc_hash=doc_hash,
+                    metadata=doc_metadata,
+                    language=detected_lang
+                )
+                return {
+                    "status": "warning",
+                    "document_id": doc_id,
+                    "chunks_count": 0,
+                    "warning": doc_warning,
+                    "language": detected_lang
+                }
             return {"status": "failed", "reason": "no_text_extracted"}
             
         # 3. Embedding
@@ -87,12 +115,21 @@ class IngestionPipeline:
             file_type=file_type,
             file_size=file_size,
             doc_hash=doc_hash,
-            metadata=metadata or {}
+            metadata=doc_metadata,
+            language=detected_lang
         )
         
         if success:
             self.repo.insert_chunks(db_chunks)
             logger.info(f"Successfully ingested {path.name} ({len(chunks)} chunks).")
-            return {"status": "success", "document_id": doc_id, "chunks_count": len(chunks)}
+            res = {
+                "status": "success",
+                "document_id": doc_id,
+                "chunks_count": len(chunks),
+                "language": detected_lang
+            }
+            if doc_warning:
+                res["warning"] = doc_warning
+            return res
         else:
             return {"status": "failed", "reason": "db_insert_error"}

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS documents (
     file_type TEXT NOT NULL,
     file_size INTEGER NOT NULL,
     doc_hash TEXT UNIQUE NOT NULL,
+    language TEXT DEFAULT 'en',
     metadata_json TEXT DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -62,3 +63,25 @@ CREATE TRIGGER IF NOT EXISTS fts_chunks_au AFTER UPDATE ON document_chunks BEGIN
   DELETE FROM fts_chunks WHERE chunk_id = old.id;
   INSERT INTO fts_chunks(chunk_id, document_id, content) VALUES (new.id, new.document_id, new.content);
 END;
+
+-- System Settings & Model Version Tracking
+CREATE TABLE IF NOT EXISTS system_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Notes Section Cache for Resilient Background Map-Reduce
+CREATE TABLE IF NOT EXISTS notes_section_cache (
+    document_id TEXT NOT NULL,
+    section_index INTEGER NOT NULL,
+    detail_level TEXT NOT NULL,
+    language TEXT NOT NULL,
+    content_json TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (document_id, section_index, detail_level, language),
+    FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_cache_doc ON notes_section_cache (document_id);
+

@@ -1,0 +1,7 @@
+Cloud Computing Architecture and Scalability
+
+Cloud computing provides on-demand availability of computer system resources such as data storage and computing power.
+Infrastructure as a Service (IaaS) offers fundamental computing infrastructure like virtual machines and raw block storage.
+Platform as a Service (PaaS) delivers hardware and software tools over the internet for agile application development.
+Software as a Service (SaaS) provides complete software applications accessible directly via modern web browsers.
+Cloud elasticity allows organizations to scale computing capacity dynamically according to current real-time workload.
