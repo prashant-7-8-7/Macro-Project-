@@ -70,3 +70,18 @@ CREATE TABLE IF NOT EXISTS system_metadata (
     value TEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Notes Section Cache for Resilient Background Map-Reduce
+CREATE TABLE IF NOT EXISTS notes_section_cache (
+    document_id TEXT NOT NULL,
+    section_index INTEGER NOT NULL,
+    detail_level TEXT NOT NULL,
+    language TEXT NOT NULL,
+    content_json TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (document_id, section_index, detail_level, language),
+    FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_cache_doc ON notes_section_cache (document_id);
+

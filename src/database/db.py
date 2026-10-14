@@ -62,6 +62,22 @@ def migrate_db(conn: sqlite3.Connection):
             );
         """)
         conn.commit()
+
+        # 3. Notes section cache table migration
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notes_section_cache (
+                document_id TEXT NOT NULL,
+                section_index INTEGER NOT NULL,
+                detail_level TEXT NOT NULL,
+                language TEXT NOT NULL,
+                content_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (document_id, section_index, detail_level, language),
+                FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+            );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_cache_doc ON notes_section_cache (document_id);")
+        conn.commit()
     except Exception as e:
         logger.error(f"Error migrating database: {e}")
 

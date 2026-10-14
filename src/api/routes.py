@@ -228,13 +228,39 @@ async def create_document_notes(
             else "Document Notes"
         )
         doc_detected_lang = doc_info.get("language", "en") if doc_info else "en"
+        notes_lang = req_lang or "original"
+
+        bg_param = request.query_params.get("background")
+        is_background = (bg_param and bg_param.lower() in ("true", "1", "yes")) or (isinstance(body, dict) and body.get("background"))
+
+        if is_background:
+            from src.ai.notes_jobs import NotesJobManager
+            job_mgr = NotesJobManager.get_instance()
+            job_id = job_mgr.create_job(
+                document_id=doc_id,
+                doc_title=title,
+                chunks=chunks,
+                detail_level=detail_level or "standard",
+                notes_language=notes_lang,
+                doc_lang=doc_detected_lang,
+                repo=repo,
+            )
+            return {
+                "job_id": job_id,
+                "document_id": doc_id,
+                "status": "running",
+                "progress_pct": 5,
+                "current_step": "Starting notes generation...",
+            }
 
         response = generate_notes(
             title,
             chunks,
             doc_lang=doc_detected_lang,
             detail_level=detail_level or "standard",
-            notes_language=req_lang or "original",
+            notes_language=notes_lang,
+            document_id=doc_id,
+            repo=repo,
         )
 
         return {
@@ -257,6 +283,16 @@ async def create_document_notes(
         )
 
 
+@app.get("/api/documents/{doc_id}/notes/jobs/{job_id}")
+async def get_notes_job_status(doc_id: str, job_id: str):
+    from src.ai.notes_jobs import NotesJobManager
+    job_mgr = NotesJobManager.get_instance()
+    job = job_mgr.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Notes job not found.")
+    return job
+
+
 class RetryNotesRequest(BaseModel):
     section_indices: List[int]
     existing_notes: dict
@@ -268,6 +304,7 @@ class RetryNotesRequest(BaseModel):
 async def retry_document_notes_endpoint(
     doc_id: str,
     payload: RetryNotesRequest,
+    request: Request,
     repo: DocumentRepository = Depends(get_repo)
 ):
     try:
@@ -290,6 +327,33 @@ async def retry_document_notes_endpoint(
             else "Document Notes"
         )
         doc_lang = payload.language or (doc_info.get("language", "en") if doc_info else "en")
+        notes_lang = payload.language or payload.existing_notes.get("notes_mode")
+
+        bg_param = request.query_params.get("background")
+        is_background = bg_param and bg_param.lower() in ("true", "1", "yes")
+
+        if is_background:
+            from src.ai.notes_jobs import NotesJobManager
+            job_mgr = NotesJobManager.get_instance()
+            job_id = job_mgr.create_job(
+                document_id=doc_id,
+                doc_title=title,
+                chunks=chunks,
+                detail_level=payload.detail_level or "standard",
+                notes_language=notes_lang,
+                doc_lang=doc_lang,
+                repo=repo,
+                is_retry=True,
+                retry_section_indices=payload.section_indices,
+                existing_notes=payload.existing_notes,
+            )
+            return {
+                "job_id": job_id,
+                "document_id": doc_id,
+                "status": "running",
+                "progress_pct": 5,
+                "current_step": "Starting retry for skipped sections...",
+            }
 
         updated_notes = retry_notes(
             doc_title=title,
@@ -298,7 +362,9 @@ async def retry_document_notes_endpoint(
             existing_notes=payload.existing_notes,
             detail_level=payload.detail_level or "standard",
             doc_lang=doc_lang,
-            notes_language=payload.language or payload.existing_notes.get("notes_mode"),
+            notes_language=notes_lang,
+            repo=repo,
+            document_id=doc_id,
         )
 
         return {

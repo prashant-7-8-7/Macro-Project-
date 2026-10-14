@@ -3,7 +3,8 @@ import logging
 import math
 import os
 import re
-from typing import List, Dict, Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Dict, Any, Optional, Callable
 
 from src.ai.rag import call_llm, LANGUAGE_NAMES
 from src.ingestion.detector import detect_text_language
@@ -116,8 +117,9 @@ def map_section_to_notes(
     doc_title: str,
     detail_level: str = "standard",
     doc_lang: str = "en",
-    max_retries: int = 2,
+    max_retries: int = 3,
     allow_fallback: bool = False,
+    status_callback: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """
     MAP phase: calls the LLM for a given section to extract high-fidelity,
@@ -193,7 +195,18 @@ Return ONLY the raw JSON object."""
 
         if attempt < max_retries:
             import time
-            time.sleep(0.8 * attempt)
+            err_str = str(last_error or "").lower()
+            if "429" in err_str:
+                sleep_dur = 2.0 * attempt
+                if status_callback:
+                    status_callback(f"OpenRouter rate limit hit. Waiting {sleep_dur:.1f}s before retrying section {section.get('section_index', 1)}...")
+            elif any(c in err_str for c in ("500", "502", "503", "504")):
+                sleep_dur = 1.5 * attempt
+                if status_callback:
+                    status_callback(f"AI service busy. Retrying section {section.get('section_index', 1)} in {sleep_dur:.1f}s...")
+            else:
+                sleep_dur = 0.5 * attempt
+            time.sleep(sleep_dur)
 
     if allow_fallback:
         logger.warning(
@@ -458,11 +471,16 @@ def generate_hierarchical_notes(
     doc_lang: Optional[str] = None,
     allow_fallback: bool = False,
     notes_language: Optional[str] = None,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    document_id: Optional[str] = None,
+    repo: Optional[Any] = None,
+    concurrency: int = 2,
 ) -> Dict[str, Any]:
     """
     Main map-reduce notes generator:
     1. Group chunks into ~6k-8k sections respecting page boundaries.
-    2. MAP: Extract comprehensive notes per section, tracking any sections that fail.
+    2. MAP: Extract comprehensive notes per section with concurrency control (2-3 workers)
+       and caching in SQLite keyed by (doc_id, section, detail_level, lang).
     3. REDUCE: Hierarchically combine all successful sections into full-length notes.
     4. COVERAGE: Accurately record processed vs skipped pages/sections and provide retry hooks.
     5. LANGUAGES: Support 'original', 'en', or 'both'. In 'both' mode, generate once and translate section-by-section.
@@ -507,29 +525,97 @@ def generate_hierarchical_notes(
         notes_lang_mode,
     )
 
-    # 2. MAP: Extract notes for each section
+    # 2. MAP: Check cache & extract notes for each section
     successful_sections: List[Dict[str, Any]] = []
     failed_sections: List[Dict[str, Any]] = []
 
+    cached_sections_map: Dict[int, Dict[str, Any]] = {}
+    if repo and document_id:
+        try:
+            cached_sections_map = repo.get_all_cached_note_sections(document_id, detail_level, target_gen_lang)
+            logger.info("[Notes Cache] Found %d cached sections for doc %s", len(cached_sections_map), document_id)
+        except Exception as e:
+            logger.warning("[Notes Cache] Error fetching cache: %s", e)
+
+    sections_to_process = []
+    mapped_results: Dict[int, Dict[str, Any]] = {}
+
     for sec in sections:
-        mapped = map_section_to_notes(
-            section=sec,
-            doc_title=doc_title,
-            detail_level=detail_level,
-            doc_lang=target_gen_lang,
-            max_retries=2,
-            allow_fallback=allow_fallback,
+        sec_idx = sec.get("section_index", 1)
+        if sec_idx in cached_sections_map and cached_sections_map[sec_idx].get("status") != "failed":
+            mapped_results[sec_idx] = cached_sections_map[sec_idx]
+        else:
+            sections_to_process.append(sec)
+
+    completed_count = len(mapped_results)
+    if progress_callback:
+        progress_callback(
+            completed_count,
+            len(sections),
+            f"Reading section {min(completed_count + 1, len(sections))} of {len(sections)}..."
         )
-        if mapped.get("status") == "failed":
+
+    # Concurrently process uncached sections with bounded concurrency (2-3 workers)
+    if sections_to_process:
+        num_workers = max(1, min(concurrency, len(sections_to_process)))
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_to_sec = {
+                executor.submit(
+                    map_section_to_notes,
+                    section=sec,
+                    doc_title=doc_title,
+                    detail_level=detail_level,
+                    doc_lang=target_gen_lang,
+                    max_retries=3,
+                    allow_fallback=allow_fallback,
+                ): sec
+                for sec in sections_to_process
+            }
+
+            for future in as_completed(future_to_sec):
+                sec = future_to_sec[future]
+                sec_idx = sec.get("section_index", 1)
+                try:
+                    res = future.result()
+                except Exception as ex:
+                    res = {
+                        "status": "failed",
+                        "section_index": sec_idx,
+                        "page_start": sec.get("page_start", 1),
+                        "page_end": sec.get("page_end", 1),
+                        "page_label": sec.get("page_label", f"p. {sec.get('page_start', 1)}"),
+                        "error": str(ex),
+                    }
+                mapped_results[sec_idx] = res
+
+                # Cache succeeded section in SQLite
+                if res.get("status") != "failed" and repo and document_id:
+                    try:
+                        repo.set_cached_note_section(document_id, sec_idx, detail_level, target_gen_lang, res)
+                    except Exception as ce:
+                        logger.warning("[Notes Cache] Could not save section %d cache: %s", sec_idx, ce)
+
+                completed_count += 1
+                if progress_callback:
+                    progress_callback(
+                        completed_count,
+                        len(sections),
+                        f"Reading section {min(completed_count + 1, len(sections))} of {len(sections)}..."
+                    )
+
+    for sec in sections:
+        sec_idx = sec.get("section_index", 1)
+        res = mapped_results.get(sec_idx)
+        if not res or res.get("status") == "failed":
             failed_sections.append({
-                "section_index": sec.get("section_index", 1),
+                "section_index": sec_idx,
                 "page_start": sec.get("page_start", 1),
                 "page_end": sec.get("page_end", 1),
                 "page_label": sec.get("page_label", f"p. {sec.get('page_start', 1)}"),
-                "error": mapped.get("error", "Generation failed"),
+                "error": res.get("error", "Generation failed") if res else "Not processed",
             })
         else:
-            successful_sections.append(mapped)
+            successful_sections.append(res)
 
     # 3. REDUCE: Combine successful sections into scalable notebook format
     if successful_sections:
@@ -577,12 +663,33 @@ def generate_hierarchical_notes(
 
     # 5. DUAL NOTES (if both requested and source is not English)
     if is_both_mode and detected_lang != "en" and successful_sections:
+        if progress_callback:
+            progress_callback(len(sections), len(sections), "Translating notes for dual view...")
         logger.info("[Notes] Translating final notes section-by-section into English for Dual View...")
-        english_notes = translate_full_notes(
-            notes=final_notes,
-            source_lang=detected_lang,
-            target_lang="en",
-        )
+
+        cached_en_map = {}
+        if repo and document_id:
+            try:
+                cached_en_map = repo.get_all_cached_note_sections(document_id, detail_level, "en")
+            except Exception:
+                pass
+
+        english_notes = dict(final_notes)
+        translated_sections = []
+        for sec in final_notes.get("sections", []):
+            sec_num = sec.get("number", 1)
+            if sec_num in cached_en_map and cached_en_map[sec_num].get("status") != "failed":
+                translated_sections.append(cached_en_map[sec_num])
+            else:
+                trans = translate_section_notes(sec, source_lang=detected_lang, target_lang="en")
+                translated_sections.append(trans)
+                if repo and document_id:
+                    try:
+                        repo.set_cached_note_section(document_id, sec_num, detail_level, "en", trans)
+                    except Exception:
+                        pass
+        english_notes["sections"] = translated_sections
+
         final_notes["dual_notes"] = {
             "original": dict(final_notes),
             "english": english_notes,
@@ -602,6 +709,8 @@ def retry_failed_sections(
     doc_lang: Optional[str] = None,
     allow_fallback: bool = False,
     notes_language: Optional[str] = None,
+    repo: Optional[Any] = None,
+    document_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Retries ONLY the specified failed sections.
@@ -639,12 +748,19 @@ def retry_failed_sections(
             doc_title=doc_title,
             detail_level=detail_level,
             doc_lang=detected_lang,
-            max_retries=2,
+            max_retries=3,
             allow_fallback=allow_fallback,
         )
 
         if mapped.get("status") != "failed":
-            # Success! Format as a reduced section entry
+            # Success! Cache in database
+            if repo and document_id:
+                try:
+                    repo.set_cached_note_section(document_id, sec_idx, detail_level, detected_lang, mapped)
+                except Exception as ce:
+                    logger.warning("[Notes Cache] Retry cache save failed for sec %d: %s", sec_idx, ce)
+
+            # Format as a reduced section entry
             color = colors[(sec_idx - 1) % len(colors)]
             heading = mapped.get("heading") or f"Section {sec_idx}"
             page_range = mapped.get("page_range", sec.get("page_label", ""))

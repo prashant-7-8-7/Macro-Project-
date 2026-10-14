@@ -4,8 +4,18 @@ from typing import List, Dict, Any, Optional
 from src.database.db import get_connection
 
 class DocumentRepository:
+    _migrated = False
+
     def __init__(self):
-        pass
+        if not DocumentRepository._migrated:
+            try:
+                conn = get_connection()
+                from src.database.db import migrate_db
+                migrate_db(conn)
+                conn.close()
+                DocumentRepository._migrated = True
+            except Exception:
+                pass
 
     def insert_document(self, doc_id: str, title: str, filename: str, file_type: str, file_size: int, doc_hash: str, metadata: dict, language: str = 'en') -> bool:
         """Inserts a new document with detected language. Returns True if inserted, False if hash already exists (duplicate)."""
@@ -157,3 +167,82 @@ class DocumentRepository:
             raise e
         finally:
             conn.close()
+
+    # Notes Section Caching for Map-Reduce Scaling
+    def get_cached_note_section(
+        self, document_id: str, section_index: int, detail_level: str, language: str
+    ) -> Optional[dict]:
+        """Fetches a previously processed section note from cache."""
+        conn = get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT content_json FROM notes_section_cache
+                WHERE document_id = ? AND section_index = ? AND detail_level = ? AND language = ?
+                """,
+                (document_id, section_index, detail_level, language)
+            )
+            row = cursor.fetchone()
+            if row:
+                return json.loads(row["content_json"])
+            return None
+        finally:
+            conn.close()
+
+    def set_cached_note_section(
+        self, document_id: str, section_index: int, detail_level: str, language: str, content: dict
+    ):
+        """Caches a finished section note keyed by document id + section + detail level + language."""
+        conn = get_connection()
+        try:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO notes_section_cache (document_id, section_index, detail_level, language, content_json, created_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (document_id, section_index, detail_level, language, json.dumps(content))
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_all_cached_note_sections(
+        self, document_id: str, detail_level: str, language: str
+    ) -> Dict[int, dict]:
+        """Fetches all cached section notes for a document at given detail level and language."""
+        conn = get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT section_index, content_json FROM notes_section_cache
+                WHERE document_id = ? AND detail_level = ? AND language = ?
+                ORDER BY section_index ASC
+                """,
+                (document_id, detail_level, language)
+            )
+            return {r["section_index"]: json.loads(r["content_json"]) for r in cursor.fetchall()}
+        finally:
+            conn.close()
+
+    def clear_note_sections_cache(
+        self, document_id: str, detail_level: Optional[str] = None, language: Optional[str] = None
+    ):
+        """Clears cached sections for a document, optionally scoped to detail level and language."""
+        conn = get_connection()
+        try:
+            if detail_level and language:
+                conn.execute(
+                    "DELETE FROM notes_section_cache WHERE document_id = ? AND detail_level = ? AND language = ?",
+                    (document_id, detail_level, language)
+                )
+            elif detail_level:
+                conn.execute(
+                    "DELETE FROM notes_section_cache WHERE document_id = ? AND detail_level = ?",
+                    (document_id, detail_level)
+                )
+            else:
+                conn.execute("DELETE FROM notes_section_cache WHERE document_id = ?", (document_id,))
+            conn.commit()
+        finally:
+            conn.close()
+

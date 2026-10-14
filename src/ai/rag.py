@@ -4,7 +4,7 @@ import time
 from dotenv import load_dotenv
 
 load_dotenv()
-from typing import List, Optional
+from typing import List, Optional, Callable, Any
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +158,24 @@ def call_llm(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
                     logger.info("LLM request succeeded with model=%s", model)
                     return text.strip()
 
+            except urllib.error.HTTPError as e:
+                logger.warning(
+                    "LLM HTTP error: model=%s attempt=%d code=%d error=%s",
+                    model,
+                    attempt,
+                    e.code,
+                    e,
+                )
+                if e.code == 429:
+                    sleep_time = min(12.0, 3.0 * attempt)
+                    logger.info("Rate limit (429) hit. Backing off for %.1fs...", sleep_time)
+                    time.sleep(sleep_time)
+                elif e.code in (500, 502, 503, 504):
+                    sleep_time = min(10.0, 2.0 * attempt)
+                    logger.info("Server error (%d) hit. Backing off for %.1fs...", e.code, sleep_time)
+                    time.sleep(sleep_time)
+                elif attempt < max_attempts_per_model:
+                    time.sleep(1.5)
             except Exception as e:
                 logger.warning(
                     "LLM failed: model=%s attempt=%d error=%s",
@@ -404,6 +422,9 @@ def generate_notes(
     doc_lang: Optional[str] = None,
     detail_level: str = "standard",
     notes_language: Optional[str] = None,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    document_id: Optional[str] = None,
+    repo: Optional[Any] = None,
 ) -> dict:
     """
     Generates beautifully formatted, structured, scalable study notes
@@ -417,6 +438,9 @@ def generate_notes(
         detail_level=detail_level,
         doc_lang=doc_lang,
         notes_language=notes_language,
+        progress_callback=progress_callback,
+        document_id=document_id,
+        repo=repo,
     )
 
 
@@ -428,6 +452,8 @@ def retry_notes(
     detail_level: str = "standard",
     doc_lang: Optional[str] = None,
     notes_language: Optional[str] = None,
+    repo: Optional[Any] = None,
+    document_id: Optional[str] = None,
 ) -> dict:
     """
     Retries failed sections and splices them back into existing notes.
@@ -441,4 +467,6 @@ def retry_notes(
         detail_level=detail_level,
         doc_lang=doc_lang,
         notes_language=notes_language,
+        repo=repo,
+        document_id=document_id,
     )
