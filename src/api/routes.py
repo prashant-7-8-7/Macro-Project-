@@ -227,13 +227,14 @@ async def create_document_notes(
             if doc_info
             else "Document Notes"
         )
-        doc_lang = req_lang or (doc_info.get("language", "en") if doc_info else "en")
+        doc_detected_lang = doc_info.get("language", "en") if doc_info else "en"
 
         response = generate_notes(
             title,
             chunks,
-            doc_lang=doc_lang,
-            detail_level=detail_level
+            doc_lang=doc_detected_lang,
+            detail_level=detail_level or "standard",
+            notes_language=req_lang or "original",
         )
 
         return {
@@ -297,6 +298,7 @@ async def retry_document_notes_endpoint(
             existing_notes=payload.existing_notes,
             detail_level=payload.detail_level or "standard",
             doc_lang=doc_lang,
+            notes_language=payload.language or payload.existing_notes.get("notes_mode"),
         )
 
         return {

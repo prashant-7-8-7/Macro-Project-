@@ -834,6 +834,10 @@ async function openDocument(docId, filename, sizeKB) {
         const langBadge = document.getElementById('viewer-lang-badge');
         const langText = document.getElementById('viewer-lang-text');
         const langCode = (data.language || (data.document && data.document.language) || 'en').toUpperCase();
+        window.activeDocumentLanguage = langCode.toLowerCase();
+        if (typeof updateNotesLanguageSelector === 'function') {
+            updateNotesLanguageSelector(window.activeDocumentLanguage);
+        }
         if (langBadge && langText) {
             langText.textContent = langCode;
             langBadge.classList.remove('hidden');

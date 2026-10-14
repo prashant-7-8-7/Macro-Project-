@@ -402,11 +402,13 @@ def generate_notes(
     doc_title: str,
     chunks: List[dict],
     doc_lang: Optional[str] = None,
-    detail_level: str = "standard"
+    detail_level: str = "standard",
+    notes_language: Optional[str] = None,
 ) -> dict:
     """
     Generates beautifully formatted, structured, scalable study notes
     from document chunks using map-reduce (section-by-section extraction and merge).
+    Supports 'original', 'en', and 'both' (dual-view).
     """
     from src.ai.notes import generate_hierarchical_notes
     return generate_hierarchical_notes(
@@ -414,6 +416,7 @@ def generate_notes(
         doc_title=doc_title,
         detail_level=detail_level,
         doc_lang=doc_lang,
+        notes_language=notes_language,
     )
 
 
@@ -424,6 +427,7 @@ def retry_notes(
     existing_notes: dict,
     detail_level: str = "standard",
     doc_lang: Optional[str] = None,
+    notes_language: Optional[str] = None,
 ) -> dict:
     """
     Retries failed sections and splices them back into existing notes.
@@ -436,4 +440,5 @@ def retry_notes(
         existing_notes=existing_notes,
         detail_level=detail_level,
         doc_lang=doc_lang,
+        notes_language=notes_language,
     )

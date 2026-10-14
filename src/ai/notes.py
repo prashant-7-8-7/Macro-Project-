@@ -342,12 +342,122 @@ def reduce_section_notes(
     }
 
 
+def translate_section_notes(
+    section_dict: Dict[str, Any],
+    source_lang: str,
+    target_lang: str = "en",
+    max_retries: int = 2,
+) -> Dict[str, Any]:
+    """
+    Translates a mapped/reduced section note from source_lang to target_lang.
+    Preserves heading, explanation, bullets, keyBox, tip, layout, and color.
+    Retains the original technical term in brackets beside translated terms
+    (e.g., 'गतिज ऊर्जा [Kinetic Energy]' or 'Depth-First Search [गहन-प्रथम खोज]').
+    """
+    if not section_dict or source_lang == target_lang:
+        return section_dict
+
+    source_lang_name = LANGUAGE_NAMES.get(source_lang, source_lang)
+    target_lang_name = LANGUAGE_NAMES.get(target_lang, target_lang)
+
+    payload = {
+        "heading": section_dict.get("heading", ""),
+        "explanation": section_dict.get("content", section_dict.get("explanation", "")),
+        "bullets": section_dict.get("bullets", []),
+        "keyBox": section_dict.get("keyBox", {}),
+        "tip": section_dict.get("tip", ""),
+    }
+
+    prompt = f"""You are an expert multilingual academic translator.
+Translate the following study notes section from {source_lang_name} ({source_lang}) into {target_lang_name} ({target_lang}).
+
+RULES:
+1. Translate all headings, explanations, bullets, key terms, and tips naturally and accurately into {target_lang_name}.
+2. TECHNICAL TERMS: For all significant technical, computational, mathematical, scientific, or domain-specific terms, preserve the original term in brackets beside the translation (for example: "गतिज ऊर्जा [Kinetic Energy]" or "Depth-First Search [गहन-प्रथम खोज]").
+3. PRESERVE STRUCTURE: Keep the exact same JSON schema and layout. Do not invent or drop any bullet points.
+4. Return ONLY valid JSON (no markdown code blocks, no preamble).
+
+SECTION JSON TO TRANSLATE:
+{json.dumps(payload, ensure_ascii=False, indent=2)}
+
+Return ONLY the raw JSON object."""
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            raw_response = call_llm(prompt, max_attempts_per_model=2)
+            if raw_response:
+                parsed = _safe_parse_json(raw_response)
+                if parsed and isinstance(parsed, dict):
+                    translated = dict(section_dict)
+                    if parsed.get("heading"):
+                        translated["heading"] = parsed["heading"]
+                    if parsed.get("explanation"):
+                        translated["content"] = parsed["explanation"]
+                        translated["explanation"] = parsed["explanation"]
+                    if parsed.get("bullets") and isinstance(parsed["bullets"], list):
+                        translated["bullets"] = parsed["bullets"]
+                    if parsed.get("keyBox") and isinstance(parsed["keyBox"], dict):
+                        translated["keyBox"] = parsed["keyBox"]
+                    if parsed.get("tip"):
+                        translated["tip"] = parsed["tip"]
+                    translated["language"] = target_lang
+                    return translated
+        except Exception as e:
+            logger.warning("[Notes Translate] Attempt %d failed: %s", attempt, e)
+
+    return dict(section_dict)
+
+
+def translate_full_notes(
+    notes: Dict[str, Any],
+    source_lang: str,
+    target_lang: str = "en",
+) -> Dict[str, Any]:
+    """
+    Translates an entire structured notes document section-by-section from source_lang to target_lang.
+    Keeps identical headings, order, section numbers, layouts, colors, and coverage.
+    """
+    if not notes or source_lang == target_lang:
+        return notes
+
+    source_lang_name = LANGUAGE_NAMES.get(source_lang, source_lang)
+    target_lang_name = LANGUAGE_NAMES.get(target_lang, target_lang)
+
+    translated_sections = []
+    for sec in notes.get("sections", []):
+        tr_sec = translate_section_notes(
+            section_dict=sec,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
+        translated_sections.append(tr_sec)
+
+    translated_notes = dict(notes)
+    translated_notes["sections"] = translated_sections
+    translated_notes["language"] = target_lang
+    translated_notes["language_name"] = target_lang_name
+    translated_notes["subject"] = f"Study Notes ({len(translated_sections)} Sections - {target_lang_name})"
+
+    if translated_sections:
+        translated_notes["keyTakeaways"] = [
+            sec["bullets"][0] for sec in translated_sections if sec.get("bullets")
+        ][:8]
+        translated_notes["remember"] = [
+            sec["keyBox"]["items"][0]
+            for sec in translated_sections
+            if sec.get("keyBox") and sec["keyBox"].get("items")
+        ][:6]
+
+    return translated_notes
+
+
 def generate_hierarchical_notes(
     chunks: List[Dict[str, Any]],
     doc_title: str,
     detail_level: str = "standard",
     doc_lang: Optional[str] = None,
     allow_fallback: bool = False,
+    notes_language: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Main map-reduce notes generator:
@@ -355,6 +465,7 @@ def generate_hierarchical_notes(
     2. MAP: Extract comprehensive notes per section, tracking any sections that fail.
     3. REDUCE: Hierarchically combine all successful sections into full-length notes.
     4. COVERAGE: Accurately record processed vs skipped pages/sections and provide retry hooks.
+    5. LANGUAGES: Support 'original', 'en', or 'both'. In 'both' mode, generate once and translate section-by-section.
     """
     if not chunks:
         return {"notes": None, "error": "No document content found."}
@@ -362,6 +473,21 @@ def generate_hierarchical_notes(
     # Detect language if not provided
     sample_text = " ".join(c.get("content", "") for c in chunks[:3])
     detected_lang = doc_lang or chunks[0].get("language") or detect_text_language(sample_text)
+
+    # Determine generation language and dual mode
+    notes_lang_mode = (notes_language or "original").lower().strip()
+    if notes_lang_mode in ("both", "dual"):
+        is_both_mode = True
+        target_gen_lang = detected_lang if detected_lang != "en" else "en"
+    elif notes_lang_mode in ("en", "english"):
+        is_both_mode = False
+        target_gen_lang = "en"
+    elif notes_lang_mode == "original" or not notes_lang_mode:
+        is_both_mode = False
+        target_gen_lang = detected_lang
+    else:
+        is_both_mode = False
+        target_gen_lang = notes_lang_mode
 
     # 1. Group chunks into page-aligned sections
     sections = group_chunks_into_sections(chunks)
@@ -373,11 +499,12 @@ def generate_hierarchical_notes(
     coverage_label = f"pages {min_page}-{total_pages} of {total_pages} ({len(sections)} sections)"
 
     logger.info(
-        "[Notes] Generating notes for '%s' (%s, detail=%s, lang=%s)",
+        "[Notes] Generating notes for '%s' (%s, detail=%s, gen_lang=%s, mode=%s)",
         doc_title,
         coverage_label,
         detail_level,
-        detected_lang,
+        target_gen_lang,
+        notes_lang_mode,
     )
 
     # 2. MAP: Extract notes for each section
@@ -389,7 +516,7 @@ def generate_hierarchical_notes(
             section=sec,
             doc_title=doc_title,
             detail_level=detail_level,
-            doc_lang=detected_lang,
+            doc_lang=target_gen_lang,
             max_retries=2,
             allow_fallback=allow_fallback,
         )
@@ -410,7 +537,7 @@ def generate_hierarchical_notes(
             section_notes_list=successful_sections,
             doc_title=doc_title,
             detail_level=detail_level,
-            doc_lang=detected_lang,
+            doc_lang=target_gen_lang,
             total_pages_covered=coverage_label,
         )
     else:
@@ -444,6 +571,25 @@ def generate_hierarchical_notes(
         "skipped_pages_text": skipped_pages_text,
     }
 
+    final_notes["language"] = target_gen_lang
+    final_notes["language_name"] = LANGUAGE_NAMES.get(target_gen_lang, target_gen_lang)
+    final_notes["notes_mode"] = "both" if (is_both_mode and detected_lang != "en") else "single"
+
+    # 5. DUAL NOTES (if both requested and source is not English)
+    if is_both_mode and detected_lang != "en" and successful_sections:
+        logger.info("[Notes] Translating final notes section-by-section into English for Dual View...")
+        english_notes = translate_full_notes(
+            notes=final_notes,
+            source_lang=detected_lang,
+            target_lang="en",
+        )
+        final_notes["dual_notes"] = {
+            "original": dict(final_notes),
+            "english": english_notes,
+            "original_lang": detected_lang,
+            "original_lang_name": LANGUAGE_NAMES.get(detected_lang, detected_lang),
+        }
+
     return {"notes": final_notes}
 
 
@@ -455,6 +601,7 @@ def retry_failed_sections(
     detail_level: str = "standard",
     doc_lang: Optional[str] = None,
     allow_fallback: bool = False,
+    notes_language: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Retries ONLY the specified failed sections.
@@ -569,6 +716,17 @@ def retry_failed_sections(
         "coverage_text": coverage_text,
         "skipped_pages_text": skipped_pages_text,
     }
+
+    # If in dual mode, update the translated dual version as well
+    if existing_notes.get("dual_notes"):
+        orig_lang = existing_notes["dual_notes"].get("original_lang", detected_lang)
+        english_notes = translate_full_notes(
+            notes=existing_notes,
+            source_lang=orig_lang,
+            target_lang="en",
+        )
+        existing_notes["dual_notes"]["original"] = dict(existing_notes)
+        existing_notes["dual_notes"]["english"] = english_notes
 
     return existing_notes
 

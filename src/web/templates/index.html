@@ -294,7 +294,25 @@
                                     Structured, comprehensive study notes scaling with your document length.
                                 </p>
                             </div>
-                            <div class="assistant-actions" style="margin:0;display:flex;gap:10px;">
+                            <div class="assistant-actions" style="margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                                <!-- Detail Level Selector -->
+                                <div class="notes-control-group" style="display:flex;align-items:center;gap:6px;">
+                                    <label for="notes-detail-select" style="font-size:0.82rem;font-weight:600;color:var(--text-secondary);">Detail:</label>
+                                    <select id="notes-detail-select" class="notes-select" style="background:var(--bg-surface-elevated);color:var(--text-primary);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:6px 10px;font-size:0.82rem;cursor:pointer;">
+                                        <option value="brief">Brief (~5%)</option>
+                                        <option value="standard" selected>Standard (~12-15%)</option>
+                                        <option value="detailed">Detailed (~25%)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Notes Language Selector -->
+                                <div class="notes-control-group" id="notes-lang-control-group" style="display:flex;align-items:center;gap:6px;">
+                                    <label for="notes-lang-select" style="font-size:0.82rem;font-weight:600;color:var(--text-secondary);"><i class="fa-solid fa-language"></i> Language:</label>
+                                    <select id="notes-lang-select" class="notes-select" style="background:var(--bg-surface-elevated);color:var(--text-primary);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:6px 10px;font-size:0.82rem;cursor:pointer;">
+                                        <option value="en">English</option>
+                                    </select>
+                                </div>
+
                                 <button id="tab-btn-generate-notes" class="btn-primary" title="Generate comprehensive study notes">
                                     <span class="btn-shine"></span>
                                     <i class="fa-solid fa-wand-magic-sparkles"></i>
@@ -633,7 +651,82 @@
         background: #bf360c;
         transform: translateY(-1px);
     }
-    @media print { #notes-modal{position:relative!important;background:white!important;} #notes-btn-close,#notes-btn-print,#tab-btn-print-notes{display:none!important;} }
+
+    /* Dual Language Notes Styles & Font Stack */
+    .nf-page, .nf-heading, .nf-text, .nf-bullets li, .nf-key, .nf-tip, .nf-takeaway, .nf-remember {
+        font-family: 'Patrick Hand', 'Noto Sans Devanagari', 'Noto Sans Arabic', 'Noto Sans Tamil', 'Noto Sans Bengali', 'Noto Sans', system-ui, sans-serif;
+    }
+    .nf-heading, .nf-title, .nf-num, .nf-key-title, .nf-takeaway h3, .nf-remember h3 {
+        font-family: 'Kalam', 'Noto Sans Devanagari', 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+    }
+    .nf-dual-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 1.5px dashed rgba(0, 0, 0, 0.15);
+    }
+    .nf-dual-tabs {
+        display: inline-flex;
+        background: rgba(0, 0, 0, 0.06);
+        padding: 4px;
+        border-radius: 8px;
+        gap: 4px;
+    }
+    .nf-dual-tab-btn {
+        background: transparent;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-family: var(--font-sans, -apple-system, sans-serif);
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #5a5a6e;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+    .nf-dual-tab-btn.active {
+        background: #ffffff;
+        color: #1a1a2e;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+        font-weight: 700;
+    }
+    .nf-dual-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-bottom: 24px;
+        padding-bottom: 20px;
+        border-bottom: 1.5px dashed rgba(0, 0, 0, 0.12);
+    }
+    .nf-dual-col {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .nf-dual-col-header {
+        font-family: 'Kalam', cursive;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        width: fit-content;
+        background: rgba(0, 0, 0, 0.05);
+        color: #5a5a6e;
+    }
+    @media (max-width: 768px) {
+        .nf-dual-row {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+    }
+    @media print { #notes-modal{position:relative!important;background:white!important;} #notes-btn-close,#notes-btn-print,#tab-btn-print-notes,.nf-dual-toolbar{display:none!important;} }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

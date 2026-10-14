@@ -16,8 +16,68 @@ const tabNotesEmpty = document.getElementById('tab-notes-empty');
 const tabBtnGenerateNotes = document.getElementById('tab-btn-generate-notes');
 const tabBtnPrintNotes = document.getElementById('tab-btn-print-notes');
 
+const LANGUAGE_DISPLAY_NAMES = {
+    'en': 'English',
+    'hi': 'Hindi',
+    'es': 'Spanish',
+    'ar': 'Arabic',
+    'zh': 'Chinese',
+    'ja': 'Japanese',
+    'fr': 'French',
+    'de': 'German',
+    'ru': 'Russian',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'bn': 'Bengali',
+    'mr': 'Marathi',
+    'gu': 'Gujarati',
+    'kn': 'Kannada',
+    'ml': 'Malayalam',
+    'pa': 'Punjabi',
+    'ur': 'Urdu',
+    'pt': 'Portuguese',
+    'it': 'Italian'
+};
+
+function updateNotesLanguageSelector(langCode) {
+    const langSelect = document.getElementById('notes-lang-select');
+    if (!langSelect) return;
+
+    const code = (langCode || 'en').toLowerCase().trim();
+    langSelect.innerHTML = '';
+
+    if (code === 'en') {
+        const opt = document.createElement('option');
+        opt.value = 'en';
+        opt.textContent = 'English';
+        langSelect.appendChild(opt);
+    } else {
+        const langName = LANGUAGE_DISPLAY_NAMES[code] || code.toUpperCase();
+
+        const optBoth = document.createElement('option');
+        optBoth.value = 'both';
+        optBoth.textContent = `Both (${langName} & English)`;
+        optBoth.selected = true;
+
+        const optOriginal = document.createElement('option');
+        optOriginal.value = 'original';
+        optOriginal.textContent = `Original (${langName})`;
+
+        const optEnglish = document.createElement('option');
+        optEnglish.value = 'en';
+        optEnglish.textContent = 'English';
+
+        langSelect.appendChild(optBoth);
+        langSelect.appendChild(optOriginal);
+        langSelect.appendChild(optEnglish);
+    }
+}
+window.updateNotesLanguageSelector = updateNotesLanguageSelector;
+
 // ── Wire up button after DOM ready ──────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    updateNotesLanguageSelector(window.activeDocumentLanguage || 'en');
+
     const btnMakeNotes = document.getElementById('btn-make-notes');
     if (btnMakeNotes) {
         btnMakeNotes.addEventListener('click', handleMakeNotes);
@@ -58,6 +118,11 @@ async function handleMakeNotes() {
         return;
     }
 
+    const detailSelect = document.getElementById('notes-detail-select');
+    const langSelect = document.getElementById('notes-lang-select');
+    const detailLevel = detailSelect ? detailSelect.value : 'standard';
+    const notesLang = langSelect ? langSelect.value : 'original';
+
     showNotesLoading(true);
 
     try {
@@ -66,7 +131,11 @@ async function handleMakeNotes() {
         const baseUrl = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
         const res = await fetch(`${baseUrl}/api/documents/${docId}/notes`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                detail_level: detailLevel,
+                language: notesLang
+            })
         });
         if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
@@ -337,10 +406,94 @@ function createNotebookElement(data) {
         });
     }
 
-    // Sections
-    (data.sections || []).forEach((sec, i) => {
-        page.appendChild(buildSection(sec, i));
-    });
+    // Sections (Dual View or Single View)
+    if (data.dual_notes) {
+        const origLangName = data.dual_notes.original_lang_name || 'Original';
+        const origNotes = data.dual_notes.original || data;
+        const engNotes = data.dual_notes.english || data;
+        const origSections = origNotes.sections || [];
+        const engSections = engNotes.sections || [];
+
+        // Dual Mode Toolbar
+        const dualToolbar = document.createElement('div');
+        dualToolbar.className = 'nf-dual-toolbar';
+        dualToolbar.innerHTML = `
+            <div class="nf-dual-tabs" role="tablist">
+                <button type="button" class="nf-dual-tab-btn active" data-view="both">
+                    <i class="fa-solid fa-table-columns"></i> Side-by-Side
+                </button>
+                <button type="button" class="nf-dual-tab-btn" data-view="original">
+                    <i class="fa-solid fa-language"></i> ${esc(origLangName)}
+                </button>
+                <button type="button" class="nf-dual-tab-btn" data-view="english">
+                    <i class="fa-solid fa-globe"></i> English
+                </button>
+            </div>
+        `;
+        page.appendChild(dualToolbar);
+
+        const dualContainer = document.createElement('div');
+        dualContainer.className = 'nf-dual-container';
+
+        const maxSections = Math.max(origSections.length, engSections.length);
+        const rowElements = [];
+
+        for (let i = 0; i < maxSections; i++) {
+            const origSec = origSections[i];
+            const engSec = engSections[i];
+
+            const row = document.createElement('div');
+            row.className = 'nf-dual-row';
+
+            const leftCol = document.createElement('div');
+            leftCol.className = 'nf-dual-col nf-dual-orig';
+            leftCol.setAttribute('dir', 'auto');
+            leftCol.innerHTML = `<div class="nf-dual-col-header" dir="auto">${esc(origLangName)}</div>`;
+            if (origSec) leftCol.appendChild(buildSection(origSec, i));
+
+            const rightCol = document.createElement('div');
+            rightCol.className = 'nf-dual-col nf-dual-eng';
+            rightCol.setAttribute('dir', 'auto');
+            rightCol.innerHTML = `<div class="nf-dual-col-header" dir="auto">English</div>`;
+            if (engSec) rightCol.appendChild(buildSection(engSec, i));
+
+            row.appendChild(leftCol);
+            row.appendChild(rightCol);
+            dualContainer.appendChild(row);
+            rowElements.push({ row, leftCol, rightCol });
+        }
+
+        page.appendChild(dualContainer);
+
+        dualToolbar.querySelectorAll('.nf-dual-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                dualToolbar.querySelectorAll('.nf-dual-tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const view = btn.dataset.view;
+
+                rowElements.forEach(({ row, leftCol, rightCol }) => {
+                    if (view === 'both') {
+                        row.style.gridTemplateColumns = '1fr 1fr';
+                        leftCol.style.display = 'flex';
+                        rightCol.style.display = 'flex';
+                    } else if (view === 'original') {
+                        row.style.gridTemplateColumns = '1fr';
+                        leftCol.style.display = 'flex';
+                        rightCol.style.display = 'none';
+                    } else if (view === 'english') {
+                        row.style.gridTemplateColumns = '1fr';
+                        leftCol.style.display = 'none';
+                        rightCol.style.display = 'flex';
+                    }
+                });
+            });
+        });
+    } else {
+        // Sections
+        (data.sections || []).forEach((sec, i) => {
+            page.appendChild(buildSection(sec, i));
+        });
+    }
 
     // Footer
     if ((data.keyTakeaways && data.keyTakeaways.length) || (data.remember && data.remember.length)) {
@@ -400,7 +553,7 @@ function buildSection(sec, idx) {
     wrapper.innerHTML = `
         <div class="nf-sec-header">
             <div class="nf-num">${sec.number || idx + 1}</div>
-            <div class="nf-heading">${esc(sec.heading)}</div>
+            <div class="nf-heading" dir="auto">${esc(sec.heading)}</div>
         </div>
     `;
 
@@ -425,7 +578,8 @@ function buildSection(sec, idx) {
     if (sec.tip) {
         const tip = document.createElement('div');
         tip.className = 'nf-tip';
-        tip.innerHTML = `<span>💡</span><span>${esc(sec.tip)}</span>`;
+        tip.setAttribute('dir', 'auto');
+        tip.innerHTML = `<span>💡</span><span dir="auto">${esc(sec.tip)}</span>`;
         body.appendChild(tip);
     }
 
@@ -441,6 +595,7 @@ function buildSection(sec, idx) {
 function buildText(content) {
     const p = document.createElement('p');
     p.className = 'nf-text';
+    p.setAttribute('dir', 'auto');
     p.innerHTML = esc(content).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     return p;
 }
@@ -448,8 +603,10 @@ function buildText(content) {
 function buildBullets(items) {
     const ul = document.createElement('ul');
     ul.className = 'nf-bullets';
+    ul.setAttribute('dir', 'auto');
     items.forEach(b => {
         const li = document.createElement('li');
+        li.setAttribute('dir', 'auto');
         li.innerHTML = esc(b).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         ul.appendChild(li);
     });
@@ -459,10 +616,13 @@ function buildBullets(items) {
 function buildKeyBox(kb) {
     const box = document.createElement('div');
     box.className = 'nf-key';
-    box.innerHTML = `<div class="nf-key-title">${esc(kb.title || '⭐ Key Concept')}</div>`;
+    box.setAttribute('dir', 'auto');
+    box.innerHTML = `<div class="nf-key-title" dir="auto">${esc(kb.title || '⭐ Key Concept')}</div>`;
     const ul = document.createElement('ul');
+    ul.setAttribute('dir', 'auto');
     (kb.items || []).forEach(item => {
         const li = document.createElement('li');
+        li.setAttribute('dir', 'auto');
         li.innerHTML = esc(item).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         ul.appendChild(li);
     });
@@ -473,12 +633,15 @@ function buildKeyBox(kb) {
 function buildComparison(cmp) {
     const box = document.createElement('div');
     box.className = 'nf-cmp';
+    box.setAttribute('dir', 'auto');
 
     const left = document.createElement('div');
     left.className = 'nf-cmp-col';
-    left.innerHTML = `<div class="nf-cmp-title">${esc(cmp.left.title)}</div>`;
+    left.setAttribute('dir', 'auto');
+    left.innerHTML = `<div class="nf-cmp-title" dir="auto">${esc(cmp.left.title)}</div>`;
     const lu = document.createElement('ul');
-    (cmp.left.items || []).forEach(i => { const li = document.createElement('li'); li.textContent = i; lu.appendChild(li); });
+    lu.setAttribute('dir', 'auto');
+    (cmp.left.items || []).forEach(i => { const li = document.createElement('li'); li.setAttribute('dir', 'auto'); li.textContent = i; lu.appendChild(li); });
     left.appendChild(lu);
 
     const divider = document.createElement('div');
@@ -486,9 +649,11 @@ function buildComparison(cmp) {
 
     const right = document.createElement('div');
     right.className = 'nf-cmp-col';
-    right.innerHTML = `<div class="nf-cmp-title">${esc(cmp.right.title)}</div>`;
+    right.setAttribute('dir', 'auto');
+    right.innerHTML = `<div class="nf-cmp-title" dir="auto">${esc(cmp.right.title)}</div>`;
     const ru = document.createElement('ul');
-    (cmp.right.items || []).forEach(i => { const li = document.createElement('li'); li.textContent = i; ru.appendChild(li); });
+    ru.setAttribute('dir', 'auto');
+    (cmp.right.items || []).forEach(i => { const li = document.createElement('li'); li.setAttribute('dir', 'auto'); li.textContent = i; ru.appendChild(li); });
     right.appendChild(ru);
 
     box.appendChild(left); box.appendChild(divider); box.appendChild(right);
@@ -502,9 +667,11 @@ function buildFooter(takeaways, remember) {
     if (takeaways && takeaways.length) {
         const box = document.createElement('div');
         box.className = 'nf-takeaway';
-        box.innerHTML = '<h3>✅ Key Takeaways</h3>';
+        box.setAttribute('dir', 'auto');
+        box.innerHTML = '<h3 dir="auto">✅ Key Takeaways</h3>';
         const ul = document.createElement('ul');
-        takeaways.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+        ul.setAttribute('dir', 'auto');
+        takeaways.forEach(t => { const li = document.createElement('li'); li.setAttribute('dir', 'auto'); li.textContent = t; ul.appendChild(li); });
         box.appendChild(ul);
         footer.appendChild(box);
     }
@@ -512,9 +679,11 @@ function buildFooter(takeaways, remember) {
     if (remember && remember.length) {
         const box = document.createElement('div');
         box.className = 'nf-remember';
-        box.innerHTML = '<h3>⭐ Remember</h3>';
+        box.setAttribute('dir', 'auto');
+        box.innerHTML = '<h3 dir="auto">⭐ Remember</h3>';
         const ul = document.createElement('ul');
-        remember.forEach(r => { const li = document.createElement('li'); li.textContent = r; ul.appendChild(li); });
+        ul.setAttribute('dir', 'auto');
+        remember.forEach(r => { const li = document.createElement('li'); li.setAttribute('dir', 'auto'); li.textContent = r; ul.appendChild(li); });
         box.appendChild(ul);
         footer.appendChild(box);
     }
