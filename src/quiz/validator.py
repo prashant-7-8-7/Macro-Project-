@@ -1,5 +1,6 @@
 import logging
 import re
+import unicodedata
 from typing import List, Dict, Tuple
 
 from src.quiz.schemas import QuizQuestion
@@ -8,12 +9,38 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_text(text: str) -> str:
-    """Normalize text for comparison by lowercasing and stripping prefixes/punctuation."""
+    """Normalize text for comparison by lowercasing, NFKC normalizing, and stripping prefixes/punctuation."""
     if not text:
         return ""
+    norm = unicodedata.normalize("NFKC", text.strip())
     # Strip common MCQ prefixes like "A)", "B.", "1-", etc.
-    cleaned = re.sub(r'^[A-Da-d0-9][\).\:\-]\s*', '', text.strip())
+    cleaned = re.sub(r'^[A-Da-d0-9][\).\:\-]\s*', '', norm)
     return cleaned.strip().lower()
+
+
+def _extract_grounding_features(text: str) -> set:
+    """
+    Extracts Unicode word tokens and character 3-grams for robust grounding
+    verification across all languages and scripts (Latin, Indic, CJK, Arabic, etc.).
+    """
+    if not text:
+        return set()
+    norm = unicodedata.normalize("NFKC", text).lower()
+
+    # 1. Unicode word tokens
+    words = {w for w in re.findall(r'[\w]+', norm, re.UNICODE) if len(w) >= 2}
+
+    # 2. Character n-grams (3-grams) across non-punctuation/non-whitespace characters
+    clean_chars = "".join(c for c in norm if not unicodedata.category(c).startswith(('P', 'Z', 'S', 'C')))
+    ngrams = set()
+    n = 3
+    if len(clean_chars) >= n:
+        for i in range(len(clean_chars) - n + 1):
+            ngrams.add(clean_chars[i:i+n])
+    elif clean_chars:
+        ngrams.add(clean_chars)
+
+    return words | ngrams
 
 
 def validate_question(
@@ -107,20 +134,28 @@ def validate_question(
     if matched_chunk_idx is None and len(contexts) == 1:
         matched_chunk_idx = str(contexts[0].get("chunk_index", 0))
 
-    # If multiple chunks, ground using keyword presence in contexts
+    # If multiple chunks, ground using Unicode-safe token and n-gram overlap
     if matched_chunk_idx is None and contexts:
-        q_tokens = set(re.findall(r'\b[a-zA-Z0-9]{3,}\b', (question.question + " " + question.correct_answer).lower()))
+        q_features = _extract_grounding_features(question.question + " " + question.correct_answer)
+        norm_ans = _normalize_text(question.correct_answer)
         best_chunk = None
-        best_overlap = 0
+        best_score = 0
 
         for ctx in contexts:
-            content = ctx.get("content", "").lower()
-            overlap = sum(1 for token in q_tokens if token in content)
-            if overlap > best_overlap:
-                best_overlap = overlap
+            content = ctx.get("content", "")
+            norm_content = unicodedata.normalize("NFKC", content).lower()
+            chunk_features = _extract_grounding_features(content)
+            overlap = len(q_features & chunk_features)
+
+            # Bonus score if normalized correct answer directly appears in chunk
+            bonus = 10 if (len(norm_ans) >= 2 and norm_ans in norm_content) else 0
+            score = overlap + bonus
+
+            if score > best_score:
+                best_score = score
                 best_chunk = ctx
 
-        if best_chunk and best_overlap >= 1:
+        if best_chunk and best_score >= 1:
             matched_chunk_idx = str(best_chunk.get("chunk_index", 0))
             if question.source_page is None:
                 question.source_page = best_chunk.get("page_number", 1)
@@ -161,7 +196,7 @@ def validate_questions(
     for idx, question in enumerate(questions):
 
         normalized = " ".join(
-            question.question.lower().split()
+            unicodedata.normalize("NFKC", question.question).lower().split()
         )
 
         # Duplicate question check
