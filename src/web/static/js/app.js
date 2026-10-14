@@ -831,7 +831,8 @@ async function openDocument(docId, filename, sizeKB) {
     // Fetch and render content
     try {
         const data = await fetchDocumentContent(docId);
-        renderDocumentContent(data.chunks);
+        window.currentDocWarning = data.warning || null;
+        renderDocumentContent(data.chunks, '', data.warning);
     } catch (err) {
         viewerContent.innerHTML = `<p style="color: #ef4444;">Error loading document content.</p>`;
     }
@@ -841,27 +842,53 @@ function closeDocument() {
     activeDocumentId = null;
     window.activeDocumentId = null;
     window.activeDocumentFilename = null;
+    window.currentDocWarning = null;
     emptyState.classList.remove('hidden');
     documentWorkspace.classList.add('hidden');
 }
 
 // Global cache of current document chunks for in-document search
 window.currentDocChunks = [];
+window.currentDocWarning = null;
 
-function renderDocumentContent(chunks, searchQuery = '') {
+function renderDocumentContent(chunks, searchQuery = '', warning = null) {
     window.currentDocChunks = chunks || [];
+    const activeWarning = warning || window.currentDocWarning;
     viewerContent.innerHTML = '';
     
+    if (activeWarning) {
+        const warnDiv = document.createElement('div');
+        warnDiv.className = 'doc-warning-banner';
+        warnDiv.style.cssText = 'background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-md, 8px); padding: 12px 16px; margin: 12px auto 20px auto; max-width: 800px; display: flex; align-items: center; gap: 12px; color: #f59e0b;';
+        warnDiv.innerHTML = `
+            <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.25rem; flex-shrink: 0;"></i>
+            <span style="font-size: 0.9rem; font-weight: 500;">${escapeHTML(activeWarning)}</span>
+        `;
+        viewerContent.appendChild(warnDiv);
+    }
+    
     if (!chunks || chunks.length === 0) {
-        viewerContent.innerHTML = `
-            <div class="empty-state-card glass-panel" style="margin: var(--space-8) auto; max-width: 420px; text-align: center;">
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'empty-state-card glass-panel';
+        emptyDiv.style.cssText = 'margin: var(--space-8) auto; max-width: 480px; text-align: center;';
+        if (activeWarning) {
+            emptyDiv.innerHTML = `
+                <div class="empty-state-icon-wrapper" style="width: 48px; height: 48px; font-size: 1.25rem; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 style="color: #f59e0b;">Text Extraction Warning</h3>
+                <p style="margin-top: 8px;">${escapeHTML(activeWarning)}</p>
+            `;
+        } else {
+            emptyDiv.innerHTML = `
                 <div class="empty-state-icon-wrapper" style="width: 48px; height: 48px; font-size: 1.25rem;">
                     <i class="fa-regular fa-file"></i>
                 </div>
                 <h3>No Content Available</h3>
                 <p>This document appears to be empty or has no readable text chunks.</p>
-            </div>
-        `;
+            `;
+        }
+        viewerContent.appendChild(emptyDiv);
         return;
     }
     
@@ -1326,12 +1353,15 @@ async function handleFileUpload(file) {
         
         clearInterval(progressInterval);
 
+        const uploadData = await res.json().catch(() => ({}));
         if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.detail || "Upload failed");
+            throw new Error(uploadData.detail || "Upload failed");
         }
         
         updateProgress(100, '✓ Ingestion complete!');
+        if (uploadData.warning) {
+            window.showToast(uploadData.warning, 'error', 6000);
+        }
         await new Promise(r => setTimeout(r, 400));
         await loadDocuments();
         

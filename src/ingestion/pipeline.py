@@ -48,7 +48,11 @@ class IngestionPipeline:
         
         # 1. Parse Document
         logger.info(f"Parsing document: {path.name}")
-        pages = DocumentParser.parse(str(path))
+        pages, doc_warning = DocumentParser.parse(str(path))
+        
+        doc_metadata = dict(metadata or {})
+        if doc_warning:
+            doc_metadata["warning"] = doc_warning
         
         # 2. Chunking
         logger.info(f"Chunking document...")
@@ -56,6 +60,22 @@ class IngestionPipeline:
         
         if not chunks:
             logger.warning(f"No text extracted from {path.name}")
+            if doc_warning:
+                self.repo.insert_document(
+                    doc_id=doc_id,
+                    title=title,
+                    filename=path.name,
+                    file_type=file_type,
+                    file_size=file_size,
+                    doc_hash=doc_hash,
+                    metadata=doc_metadata
+                )
+                return {
+                    "status": "warning",
+                    "document_id": doc_id,
+                    "chunks_count": 0,
+                    "warning": doc_warning
+                }
             return {"status": "failed", "reason": "no_text_extracted"}
             
         # 3. Embedding
@@ -87,12 +107,15 @@ class IngestionPipeline:
             file_type=file_type,
             file_size=file_size,
             doc_hash=doc_hash,
-            metadata=metadata or {}
+            metadata=doc_metadata
         )
         
         if success:
             self.repo.insert_chunks(db_chunks)
             logger.info(f"Successfully ingested {path.name} ({len(chunks)} chunks).")
-            return {"status": "success", "document_id": doc_id, "chunks_count": len(chunks)}
+            res = {"status": "success", "document_id": doc_id, "chunks_count": len(chunks)}
+            if doc_warning:
+                res["warning"] = doc_warning
+            return res
         else:
             return {"status": "failed", "reason": "db_insert_error"}

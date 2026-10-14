@@ -165,14 +165,22 @@ async def delete_document(doc_id: str, repo: DocumentRepository = Depends(get_re
 async def get_document_content(doc_id: str, repo: DocumentRepository = Depends(get_repo)):
     try:
         chunks = repo.get_document_chunks_content(doc_id)
-        if not chunks:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        # We can also fetch the document metadata here to get the title
         docs = repo.get_all_documents()
         doc_info = next((d for d in docs if d['id'] == doc_id), None)
         
-        return {"document": doc_info, "chunks": chunks}
+        if not doc_info and not chunks:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        warning = None
+        if doc_info and doc_info.get("metadata_json"):
+            try:
+                import json
+                meta = json.loads(doc_info["metadata_json"])
+                warning = meta.get("warning")
+            except Exception:
+                pass
+        
+        return {"document": doc_info, "chunks": chunks, "warning": warning}
     except HTTPException:
         raise
     except Exception as e:
