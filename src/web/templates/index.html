@@ -16,7 +16,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Immediate Theme Initialization to Prevent Flash of Wrong Theme -->
@@ -193,7 +193,7 @@
                         <div class="viewer-search-toolbar" id="doc-search-toolbar" role="search" aria-label="Document text search">
                             <div class="doc-search-input-wrapper">
                                 <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                                <input type="text" id="doc-search-input" placeholder="Search inside this document..." autocomplete="off" aria-label="Search inside this document">
+                                <input type="text" id="doc-search-input" dir="auto" placeholder="Search inside this document..." autocomplete="off" aria-label="Search inside this document">
                                 <span id="doc-search-count" class="doc-search-count-pill hidden">0 matches</span>
                                 <button id="doc-search-clear" class="btn-clear hidden" aria-label="Clear in-document search"><i class="fa-solid fa-xmark"></i></button>
                             </div>
@@ -337,6 +337,7 @@
 
                     <div class="input-wrapper">
                         <textarea id="chat-input"
+                                  dir="auto"
                                   placeholder="Ask a question about this document... (Shift+Enter for newline)"
                                   aria-label="Ask a question about this document"
                                   rows="1"

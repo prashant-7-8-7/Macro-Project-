@@ -644,14 +644,15 @@ function setupLibrarySearch() {
             return;
         }
 
+        const normQuery = (query || '').normalize('NFKC').toLowerCase();
         const filtered = window.allDocuments.filter(doc => 
-            (doc.filename || '').toLowerCase().includes(query)
+            (doc.filename || '').normalize('NFKC').toLowerCase().includes(normQuery)
         );
         renderDocumentsList(filtered);
     }, 120);
 
     searchInput.addEventListener('input', () => {
-        const query = searchInput.value.trim().toLowerCase();
+        const query = searchInput.value.trim();
         
         if (searchClear) {
             if (query) {
@@ -824,7 +825,7 @@ async function openDocument(docId, filename, sizeKB) {
     chatContainer.innerHTML = `
         <div class="chat-message ai-message">
             <div class="avatar"><i class="fa-solid fa-robot"></i></div>
-            <div class="message-content">Hello! I'm ready to answer any questions about <strong>${filename}</strong>.</div>
+            <div class="message-content" dir="auto">Hello! I'm ready to answer any questions about <strong>${filename}</strong>.</div>
         </div>
     `;
     
@@ -905,7 +906,7 @@ function renderDocumentContent(chunks, searchQuery = '', warning = null) {
         return;
     }
     
-    const query = (searchQuery || '').trim().toLowerCase();
+    const rawQuery = (searchQuery || '').normalize('NFKC').trim();
     let totalMatches = 0;
     
     chunks.forEach((chunk, index) => {
@@ -973,17 +974,22 @@ function renderDocumentContent(chunks, searchQuery = '', warning = null) {
         // Chunk Body
         const bodyDiv = document.createElement('div');
         bodyDiv.className = 'viewer-chunk-body';
+        bodyDiv.setAttribute('dir', 'auto');
         
-        let contentHtml = chunk.content;
-        if (query) {
-            // Escape special regex chars
-            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`(${escapedQuery})`, 'gi');
-            const matches = contentHtml.match(regex);
-            if (matches) {
-                totalMatches += matches.length;
+        let contentHtml = escapeHTML((chunk.content || '').normalize('NFKC'));
+        if (rawQuery) {
+            const escapedForHtml = escapeHTML(rawQuery);
+            const escapedRegex = escapedForHtml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            try {
+                const regex = new RegExp(`(${escapedRegex})`, 'giu');
+                const matches = contentHtml.match(regex);
+                if (matches) {
+                    totalMatches += matches.length;
+                }
+                contentHtml = contentHtml.replace(regex, '<mark class="search-highlight">$1</mark>');
+            } catch (e) {
+                console.warn('Unicode search regex error:', e);
             }
-            contentHtml = contentHtml.replace(regex, '<mark class="search-highlight">$1</mark>');
         }
         
         bodyDiv.innerHTML = contentHtml.replace(/\n/g, '<br>');
@@ -995,7 +1001,7 @@ function renderDocumentContent(chunks, searchQuery = '', warning = null) {
         const isLongChunk = (chunk.content || '').length > 360 || (chunk.content || '').split('\n').length > 6;
         if (isLongChunk) {
             bodyDiv.classList.add('is-collapsible');
-            if (query && contentHtml.includes('<mark class="search-highlight">')) {
+            if (rawQuery && contentHtml.includes('<mark class="search-highlight">')) {
                 bodyDiv.classList.add('is-expanded');
             }
 
@@ -1022,7 +1028,7 @@ function renderDocumentContent(chunks, searchQuery = '', warning = null) {
     // Update search count pill if search was active
     const searchCountPill = document.getElementById('doc-search-count');
     if (searchCountPill) {
-        if (query) {
+        if (rawQuery) {
             searchCountPill.classList.remove('hidden');
             if (totalMatches > 0) {
                 searchCountPill.textContent = `${totalMatches} ${totalMatches === 1 ? 'match' : 'matches'}`;
@@ -1115,7 +1121,7 @@ function setupChat() {
                 chatContainer.innerHTML = `
                     <div class="chat-message ai-message">
                         <div class="avatar"><i class="fa-solid fa-robot"></i></div>
-                        <div class="message-content">
+                        <div class="message-content" dir="auto">
                             Hello! I'm ready to answer any questions about <strong>${filename}</strong>.
                         </div>
                     </div>
@@ -1261,7 +1267,7 @@ function appendMessage(sender, contentHTML, id = null) {
     
     div.innerHTML = `
         <div class="avatar"><i class="fa-solid ${icon}"></i></div>
-        <div class="message-content">${contentHTML}</div>
+        <div class="message-content" dir="auto">${contentHTML}</div>
     `;
     
     if (sender === 'ai' && !id) {
@@ -1573,7 +1579,7 @@ function renderQuiz(questions) {
             return `
                 <div class="quiz-option-card" data-question-index="${index}" data-option-value="${escapeHTML(rawLabel)}">
                     <div class="option-letter-badge">${letter}</div>
-                    <div class="option-text">${escapeHTML(rawLabel)}</div>
+                    <div class="option-text" dir="auto">${escapeHTML(rawLabel)}</div>
                 </div>
             `;
         }).join('');
@@ -1585,7 +1591,7 @@ function renderQuiz(questions) {
                 <span class="question-number-pill">QUESTION ${index + 1} OF ${questions.length}</span>
                 <span class="verified-badge"><i class="fa-solid fa-circle-check"></i> Verified Grounding</span>
             </div>
-            <h4 class="quiz-question">${escapeHTML(question.question)}</h4>
+            <h4 class="quiz-question" dir="auto">${escapeHTML(question.question)}</h4>
             <div class="quiz-options">
                 ${optionsHTML}
             </div>
@@ -1598,10 +1604,10 @@ function renderQuiz(questions) {
                 <button type="button" class="btn-toggle-explanation" onclick="toggleExplanation(${index})">
                     <i class="fa-solid fa-chevron-down"></i> Explanation & Source Context
                 </button>
-                <div class="quiz-explanation-body hidden" id="explanation-${index}">
+                <div class="quiz-explanation-body hidden" id="explanation-${index}" dir="auto">
                     <strong><i class="fa-solid fa-lightbulb"></i> Answer Analysis:</strong>
-                    <p style="margin:4px 0 0;">${escapeHTML(explanationText)}</p>
-                    <p style="margin:6px 0 0;font-weight:600;color:var(--brand-indigo);">Correct: ${escapeHTML(question.correct_answer)}</p>
+                    <p style="margin:4px 0 0;" dir="auto">${escapeHTML(explanationText)}</p>
+                    <p style="margin:6px 0 0;font-weight:600;color:var(--brand-indigo);" dir="auto">Correct: ${escapeHTML(question.correct_answer)}</p>
                 </div>
             </div>
         `;
