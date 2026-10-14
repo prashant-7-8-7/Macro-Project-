@@ -195,13 +195,14 @@ async def create_document_notes(
     try:
         detail_level = "standard"
         req_lang = None
+        body = {}
         try:
             body = await request.json()
             if isinstance(body, dict):
                 detail_level = body.get("detail_level", "standard")
                 req_lang = body.get("language") or body.get("lang")
         except Exception:
-            pass
+            body = {}
 
         if not req_lang:
             req_lang = request.query_params.get("lang") or request.query_params.get("language")

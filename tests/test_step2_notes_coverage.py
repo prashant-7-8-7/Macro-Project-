@@ -189,8 +189,22 @@ class TestStep2NotesCoverage(unittest.TestCase):
             print("[SKIP] test_api_retry_notes_endpoint: no documents in database, skipping API call test.")
             return
 
-        doc_id = docs[0]["id"]
-        chunks = repo.get_document_chunks_content(doc_id)
+        from src.ai.notes import group_chunks_into_sections
+        target_doc = None
+        target_chunks = None
+        for d in docs:
+            c = repo.get_document_chunks_content(d["id"])
+            if len(group_chunks_into_sections(c)) >= 2:
+                target_doc = d
+                target_chunks = c
+                break
+
+        if not target_doc:
+            target_doc = docs[0]
+            target_chunks = repo.get_document_chunks_content(target_doc["id"])
+
+        doc_id = target_doc["id"]
+        chunks = target_chunks
         if not chunks:
             print("[SKIP] test_api_retry_notes_endpoint: document has no chunks.")
             return
