@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from src.config import UPLOAD_DIR
 from src.ingestion.pipeline import IngestionPipeline
 from src.retrieval.engine import HybridSearchEngine
-from src.ai.rag import synthesize_answer, summarize_document, generate_notes
+from src.ai.rag import synthesize_answer, summarize_document, generate_notes, retry_notes
 from src.database.repository import DocumentRepository
 
 from src.database.db import init_db
@@ -250,6 +250,67 @@ async def create_document_notes(
         logging.getLogger(__name__).exception(
             "Notes generation failed"
         )
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+class RetryNotesRequest(BaseModel):
+    section_indices: List[int]
+    existing_notes: dict
+    detail_level: Optional[str] = "standard"
+    language: Optional[str] = None
+
+
+@app.post("/api/documents/{doc_id}/notes/retry")
+async def retry_document_notes_endpoint(
+    doc_id: str,
+    payload: RetryNotesRequest,
+    repo: DocumentRepository = Depends(get_repo)
+):
+    try:
+        chunks = repo.get_document_chunks_content(doc_id)
+        if not chunks:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found or contains no text."
+            )
+
+        docs = repo.get_all_documents()
+        doc_info = next(
+            (d for d in docs if d["id"] == doc_id),
+            None
+        )
+
+        title = (
+            doc_info["filename"]
+            if doc_info
+            else "Document Notes"
+        )
+        doc_lang = payload.language or (doc_info.get("language", "en") if doc_info else "en")
+
+        updated_notes = retry_notes(
+            doc_title=title,
+            chunks=chunks,
+            target_section_indices=payload.section_indices,
+            existing_notes=payload.existing_notes,
+            detail_level=payload.detail_level or "standard",
+            doc_lang=doc_lang,
+        )
+
+        return {
+            "document_id": doc_id,
+            "filename": title,
+            "notes": updated_notes
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Notes retry failed")
         raise HTTPException(
             status_code=500,
             detail=str(e)

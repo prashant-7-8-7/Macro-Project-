@@ -114,37 +114,33 @@ function setupWorkspaceTabs() {
     const tabBtnNotes = document.getElementById('tab-btn-notes');
     const panelDoc = document.getElementById('tab-panel-document');
     const panelQuiz = document.getElementById('tab-panel-quiz');
+    const panelNotes = document.getElementById('tab-panel-notes');
 
-    if (tabBtnDoc && tabBtnQuiz && panelDoc && panelQuiz) {
-        tabBtnDoc.addEventListener('click', () => {
-            tabBtnDoc.classList.add('active');
-            tabBtnDoc.setAttribute('aria-selected', 'true');
-            tabBtnQuiz.classList.remove('active');
-            tabBtnQuiz.setAttribute('aria-selected', 'false');
-
-            panelDoc.classList.remove('hidden');
-            panelQuiz.classList.add('hidden');
+    function switchWorkspaceTab(activeBtn, activePanel) {
+        [tabBtnDoc, tabBtnQuiz, tabBtnNotes].forEach(b => {
+            if (b) {
+                b.classList.toggle('active', b === activeBtn);
+                b.setAttribute('aria-selected', b === activeBtn ? 'true' : 'false');
+            }
         });
-
-        tabBtnQuiz.addEventListener('click', () => {
-            tabBtnQuiz.classList.add('active');
-            tabBtnQuiz.setAttribute('aria-selected', 'true');
-            tabBtnDoc.classList.remove('active');
-            tabBtnDoc.setAttribute('aria-selected', 'false');
-
-            panelQuiz.classList.remove('hidden');
-            panelDoc.classList.add('hidden');
+        [panelDoc, panelQuiz, panelNotes].forEach(p => {
+            if (p) {
+                p.classList.toggle('hidden', p !== activePanel);
+            }
         });
     }
 
-    if (tabBtnNotes) {
+    if (tabBtnDoc && panelDoc) {
+        tabBtnDoc.addEventListener('click', () => switchWorkspaceTab(tabBtnDoc, panelDoc));
+    }
+
+    if (tabBtnQuiz && panelQuiz) {
+        tabBtnQuiz.addEventListener('click', () => switchWorkspaceTab(tabBtnQuiz, panelQuiz));
+    }
+
+    if (tabBtnNotes && panelNotes) {
         tabBtnNotes.addEventListener('click', () => {
-            if (typeof handleMakeNotes === 'function') {
-                handleMakeNotes();
-            } else {
-                const makeNotesBtn = document.getElementById('btn-make-notes');
-                if (makeNotesBtn) makeNotesBtn.click();
-            }
+            switchWorkspaceTab(tabBtnNotes, panelNotes);
         });
     }
 }

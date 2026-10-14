@@ -116,10 +116,13 @@ def map_section_to_notes(
     doc_title: str,
     detail_level: str = "standard",
     doc_lang: str = "en",
+    max_retries: int = 2,
+    allow_fallback: bool = False,
 ) -> Dict[str, Any]:
     """
-    MAP phase: calls the LLM once for a given section to extract high-fidelity,
+    MAP phase: calls the LLM for a given section to extract high-fidelity,
     structured notes without aggressive shortening.
+    Retries with backoff if rate-limited or error.
     """
     config = DETAIL_CONFIG.get(detail_level, DETAIL_CONFIG["standard"])
     lang_name = LANGUAGE_NAMES.get(doc_lang, doc_lang)
@@ -163,28 +166,61 @@ DOCUMENT SECTION TEXT ({page_label}):
 
 Return ONLY the raw JSON object."""
 
-    raw_response = call_llm(prompt, max_attempts_per_model=2)
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            raw_response = call_llm(prompt, max_attempts_per_model=2)
+            if raw_response:
+                parsed = _safe_parse_json(raw_response)
+                if parsed and isinstance(parsed, dict):
+                    parsed["status"] = "success"
+                    parsed["page_range"] = page_label
+                    parsed["section_index"] = section.get("section_index", 1)
+                    return parsed
+                else:
+                    last_error = f"Malformed JSON from LLM: {raw_response[:80]}..."
+            else:
+                last_error = "Empty response from LLM (provider unavailable or rate-limited)."
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(
+                "[Notes Map] Section %d attempt %d/%d failed: %s",
+                section.get("section_index", 0),
+                attempt,
+                max_retries,
+                e
+            )
 
-    if not raw_response:
+        if attempt < max_retries:
+            import time
+            time.sleep(0.8 * attempt)
+
+    if allow_fallback:
         logger.warning(
-            "[Notes Map] Section %d (%s) received empty response from LLM.",
+            "[Notes Map] Section %d (%s) failed after %d retries. Using structured fallback.",
             section.get("section_index", 0),
             page_label,
+            max_retries,
         )
-        return _build_fallback_section(section, doc_title)
+        fb = _build_fallback_section(section, doc_title)
+        fb["status"] = "success"
+        return fb
 
-    parsed = _safe_parse_json(raw_response)
-    if not parsed or not isinstance(parsed, dict):
-        logger.warning(
-            "[Notes Map] Section %d failed to parse JSON. Falling back to local structured extraction.",
-            section.get("section_index", 0)
-        )
-        return _build_fallback_section(section, doc_title, raw_text=raw_response)
-
-    # Ensure page label is set
-    parsed["page_range"] = page_label
-    parsed["section_index"] = section.get("section_index", 1)
-    return parsed
+    logger.error(
+        "[Notes Map] Section %d (%s) failed after %d retries: %s",
+        section.get("section_index", 0),
+        page_label,
+        max_retries,
+        last_error
+    )
+    return {
+        "status": "failed",
+        "section_index": section.get("section_index", 1),
+        "page_start": section.get("page_start", 1),
+        "page_end": section.get("page_end", 1),
+        "page_label": page_label,
+        "error": last_error or f"Failed after {max_retries} retries.",
+    }
 
 
 def _build_fallback_section(section: Dict[str, Any], doc_title: str, raw_text: str = "") -> Dict[str, Any]:
@@ -311,12 +347,14 @@ def generate_hierarchical_notes(
     doc_title: str,
     detail_level: str = "standard",
     doc_lang: Optional[str] = None,
+    allow_fallback: bool = False,
 ) -> Dict[str, Any]:
     """
     Main map-reduce notes generator:
     1. Group chunks into ~6k-8k sections respecting page boundaries.
-    2. MAP: Extract comprehensive notes per section.
-    3. REDUCE: Hierarchically combine all sections into full-length notes scaling with source length.
+    2. MAP: Extract comprehensive notes per section, tracking any sections that fail.
+    3. REDUCE: Hierarchically combine all successful sections into full-length notes.
+    4. COVERAGE: Accurately record processed vs skipped pages/sections and provide retry hooks.
     """
     if not chunks:
         return {"notes": None, "error": "No document content found."}
@@ -343,35 +381,196 @@ def generate_hierarchical_notes(
     )
 
     # 2. MAP: Extract notes for each section
-    mapped_sections = []
+    successful_sections: List[Dict[str, Any]] = []
+    failed_sections: List[Dict[str, Any]] = []
+
     for sec in sections:
         mapped = map_section_to_notes(
             section=sec,
             doc_title=doc_title,
             detail_level=detail_level,
             doc_lang=detected_lang,
+            max_retries=2,
+            allow_fallback=allow_fallback,
         )
-        mapped_sections.append(mapped)
+        if mapped.get("status") == "failed":
+            failed_sections.append({
+                "section_index": sec.get("section_index", 1),
+                "page_start": sec.get("page_start", 1),
+                "page_end": sec.get("page_end", 1),
+                "page_label": sec.get("page_label", f"p. {sec.get('page_start', 1)}"),
+                "error": mapped.get("error", "Generation failed"),
+            })
+        else:
+            successful_sections.append(mapped)
 
-    # 3. REDUCE: Combine all sections into scalable notebook format
-    final_notes = reduce_section_notes(
-        section_notes_list=mapped_sections,
-        doc_title=doc_title,
-        detail_level=detail_level,
-        doc_lang=detected_lang,
-        total_pages_covered=coverage_label,
-    )
+    # 3. REDUCE: Combine successful sections into scalable notebook format
+    if successful_sections:
+        final_notes = reduce_section_notes(
+            section_notes_list=successful_sections,
+            doc_title=doc_title,
+            detail_level=detail_level,
+            doc_lang=detected_lang,
+            total_pages_covered=coverage_label,
+        )
+    else:
+        final_notes = {
+            "title": doc_title or "Study Notes",
+            "subject": f"Study Notes (0 of {len(sections)} sections generated)",
+            "quote": "All sections failed after retries. Please verify your connection or click Retry.",
+            "detail_level": detail_level,
+            "sections": [],
+            "keyTakeaways": [],
+            "remember": [],
+        }
+
+    # 4. COVERAGE CHECK
+    if not failed_sections:
+        coverage_text = f"Covered pages {min_page}-{total_pages} of {total_pages} — {len(sections)} sections"
+        skipped_pages_text = None
+    else:
+        skipped_labels = [fs["page_label"] for fs in failed_sections]
+        coverage_text = f"Covered {len(successful_sections)} of {len(sections)} sections (pages {min_page}-{total_pages})"
+        skipped_pages_text = f"Skipped pages: {', '.join(skipped_labels)} ({len(failed_sections)} section{'s' if len(failed_sections) > 1 else ''} failed after retries)"
 
     final_notes["coverage"] = {
         "total_sections": len(sections),
-        "processed_sections": len(mapped_sections),
-        "failed_sections": [],
+        "processed_sections": len(successful_sections),
+        "successful_section_indices": [s.get("section_index") for s in successful_sections],
+        "failed_sections": failed_sections,
         "min_page": min_page,
         "max_page": total_pages,
-        "coverage_text": f"Covered pages {min_page}-{total_pages} of {total_pages} — {len(sections)} sections",
+        "coverage_text": coverage_text,
+        "skipped_pages_text": skipped_pages_text,
     }
 
     return {"notes": final_notes}
+
+
+def retry_failed_sections(
+    chunks: List[Dict[str, Any]],
+    doc_title: str,
+    target_section_indices: List[int],
+    existing_notes: Dict[str, Any],
+    detail_level: str = "standard",
+    doc_lang: Optional[str] = None,
+    allow_fallback: bool = False,
+) -> Dict[str, Any]:
+    """
+    Retries ONLY the specified failed sections.
+    Newly succeeded sections are spliced into existing_notes in proper numerical/page order.
+    Coverage tracking and summary fields are updated accordingly.
+    """
+    if not chunks or not existing_notes:
+        return existing_notes or {}
+
+    sections = group_chunks_into_sections(chunks)
+    sections_by_index = {s["section_index"]: s for s in sections}
+
+    total_pages = max(int(c.get("page_number") or 1) for c in chunks)
+    min_page = min(int(c.get("page_number") or 1) for c in chunks)
+
+    detected_lang = doc_lang or existing_notes.get("language") or "en"
+
+    # Current sections in existing_notes
+    current_sections = list(existing_notes.get("sections", []))
+    existing_coverage = existing_notes.get("coverage", {})
+    failed_sections_map = {
+        fs["section_index"]: fs
+        for fs in existing_coverage.get("failed_sections", [])
+    }
+
+    colors = ["green", "blue", "purple", "teal", "orange", "red"]
+
+    for sec_idx in target_section_indices:
+        sec = sections_by_index.get(sec_idx)
+        if not sec:
+            continue
+
+        mapped = map_section_to_notes(
+            section=sec,
+            doc_title=doc_title,
+            detail_level=detail_level,
+            doc_lang=detected_lang,
+            max_retries=2,
+            allow_fallback=allow_fallback,
+        )
+
+        if mapped.get("status") != "failed":
+            # Success! Format as a reduced section entry
+            color = colors[(sec_idx - 1) % len(colors)]
+            heading = mapped.get("heading") or f"Section {sec_idx}"
+            page_range = mapped.get("page_range", sec.get("page_label", ""))
+            if page_range and page_range not in heading:
+                heading = f"{heading} ({page_range})"
+
+            explanation = mapped.get("explanation", "")
+            bullets = mapped.get("bullets", [])
+            examples = mapped.get("examples", [])
+            if examples and len(bullets) < 8:
+                for ex in examples[:3]:
+                    bullets.append(f"Example: {ex}")
+
+            kb = mapped.get("keyBox")
+            layout = "split" if (kb and kb.get("items")) else "full"
+
+            new_sec_entry = {
+                "number": sec_idx,
+                "heading": heading,
+                "color": color,
+                "layout": layout,
+                "content": explanation,
+                "bullets": bullets,
+                "keyBox": kb if kb else {"title": "⭐ Key Concept", "items": bullets[:2] if bullets else ["Core principle"]},
+                "tip": mapped.get("tip") or f"Key takeaway from {page_range}"
+            }
+
+            # Replace or insert into current_sections
+            found_idx = next((i for i, s in enumerate(current_sections) if s.get("number") == sec_idx), None)
+            if found_idx is not None:
+                current_sections[found_idx] = new_sec_entry
+            else:
+                current_sections.append(new_sec_entry)
+
+            # Remove from failed sections map
+            failed_sections_map.pop(sec_idx, None)
+        else:
+            # Still failed: update error info
+            failed_sections_map[sec_idx] = {
+                "section_index": sec_idx,
+                "page_start": sec.get("page_start", 1),
+                "page_end": sec.get("page_end", 1),
+                "page_label": sec.get("page_label", f"p. {sec.get('page_start', 1)}"),
+                "error": mapped.get("error", "Retry failed"),
+            }
+
+    # Sort current_sections by section number
+    current_sections.sort(key=lambda s: int(s.get("number", 0)))
+    existing_notes["sections"] = current_sections
+
+    remaining_failed = list(failed_sections_map.values())
+    remaining_failed.sort(key=lambda s: int(s.get("section_index", 0)))
+
+    if not remaining_failed:
+        coverage_text = f"Covered pages {min_page}-{total_pages} of {total_pages} — {len(sections)} sections"
+        skipped_pages_text = None
+    else:
+        skipped_labels = [fs["page_label"] for fs in remaining_failed]
+        coverage_text = f"Covered {len(current_sections)} of {len(sections)} sections (pages {min_page}-{total_pages})"
+        skipped_pages_text = f"Skipped pages: {', '.join(skipped_labels)} ({len(remaining_failed)} section{'s' if len(remaining_failed) > 1 else ''} failed after retries)"
+
+    existing_notes["coverage"] = {
+        "total_sections": len(sections),
+        "processed_sections": len(current_sections),
+        "successful_section_indices": [s.get("number") for s in current_sections],
+        "failed_sections": remaining_failed,
+        "min_page": min_page,
+        "max_page": total_pages,
+        "coverage_text": coverage_text,
+        "skipped_pages_text": skipped_pages_text,
+    }
+
+    return existing_notes
 
 
 def _safe_parse_json(raw: str) -> Optional[Any]:

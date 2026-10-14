@@ -414,4 +414,26 @@ def generate_notes(
         doc_title=doc_title,
         detail_level=detail_level,
         doc_lang=doc_lang,
+    )
+
+
+def retry_notes(
+    doc_title: str,
+    chunks: List[dict],
+    target_section_indices: List[int],
+    existing_notes: dict,
+    detail_level: str = "standard",
+    doc_lang: Optional[str] = None,
+) -> dict:
+    """
+    Retries failed sections and splices them back into existing notes.
+    """
+    from src.ai.notes import retry_failed_sections
+    return retry_failed_sections(
+        chunks=chunks,
+        doc_title=doc_title,
+        target_section_indices=target_section_indices,
+        existing_notes=existing_notes,
+        detail_level=detail_level,
+        doc_lang=doc_lang,
     )

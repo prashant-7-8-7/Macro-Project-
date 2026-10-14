@@ -11,12 +11,19 @@ const notesNotebook = document.getElementById('notes-notebook');
 const notesBtnClose = document.getElementById('notes-btn-close');
 const notesBtnPrint = document.getElementById('notes-btn-print');
 const notesLoadingStep = document.getElementById('notes-loading-step');
+const tabNotesNotebook = document.getElementById('tab-notes-notebook');
+const tabNotesEmpty = document.getElementById('tab-notes-empty');
+const tabBtnGenerateNotes = document.getElementById('tab-btn-generate-notes');
+const tabBtnPrintNotes = document.getElementById('tab-btn-print-notes');
 
 // ── Wire up button after DOM ready ──────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     const btnMakeNotes = document.getElementById('btn-make-notes');
     if (btnMakeNotes) {
         btnMakeNotes.addEventListener('click', handleMakeNotes);
+    }
+    if (tabBtnGenerateNotes) {
+        tabBtnGenerateNotes.addEventListener('click', handleMakeNotes);
     }
     if (notesBtnClose) {
         notesBtnClose.addEventListener('click', () => {
@@ -25,6 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (notesBtnPrint) {
         notesBtnPrint.addEventListener('click', () => window.print());
+    }
+    if (tabBtnPrintNotes) {
+        tabBtnPrintNotes.addEventListener('click', () => window.print());
     }
     if (notesModal) {
         notesModal.addEventListener('click', (e) => {
@@ -73,6 +83,29 @@ async function handleMakeNotes() {
 
         renderNotes(data.notes);
         showNotesLoading(false);
+
+        // Switch workspace view to Study Notes tab if available
+        const tabBtnNotes = document.getElementById('tab-btn-notes');
+        const panelNotes = document.getElementById('tab-panel-notes');
+        const panelDoc = document.getElementById('tab-panel-document');
+        const panelQuiz = document.getElementById('tab-panel-quiz');
+        const tabBtnDoc = document.getElementById('tab-btn-document');
+        const tabBtnQuiz = document.getElementById('tab-btn-quiz');
+
+        if (tabBtnNotes && panelNotes) {
+            [tabBtnDoc, tabBtnQuiz, tabBtnNotes].forEach(b => {
+                if (b) {
+                    b.classList.toggle('active', b === tabBtnNotes);
+                    b.setAttribute('aria-selected', b === tabBtnNotes ? 'true' : 'false');
+                }
+            });
+            [panelDoc, panelQuiz, panelNotes].forEach(p => {
+                if (p) {
+                    p.classList.toggle('hidden', p !== panelNotes);
+                }
+            });
+        }
+
         notesModal.style.display = 'block';
 
     } catch (err) {
@@ -222,8 +255,21 @@ function parseJSON(raw) {
 }
 // ── Notes Renderer ───────────────────────────────────────────
 function renderNotes(data) {
-    notesNotebook.innerHTML = '';
+    if (!data) return;
+    window.activeNotesData = data;
 
+    if (tabNotesEmpty) {
+        tabNotesEmpty.style.display = 'none';
+    }
+
+    const targets = [notesNotebook, tabNotesNotebook].filter(Boolean);
+    targets.forEach(container => {
+        container.innerHTML = '';
+        container.appendChild(createNotebookElement(data));
+    });
+}
+
+function createNotebookElement(data) {
     // Outer notebook wrapper with shadow
     const wrap = document.createElement('div');
     wrap.style.cssText = 'position:relative;filter:drop-shadow(0 16px 48px rgba(0,0,0,.5));';
@@ -242,17 +288,57 @@ function renderNotes(data) {
     page.className = 'nf-page';
     page.appendChild(spiral);
 
+    // Coverage Bar
+    const coverage = data.coverage;
+    let coverageHtml = '';
+    if (coverage) {
+        const isFull = !coverage.failed_sections || coverage.failed_sections.length === 0;
+        coverageHtml = `
+            <div class="nf-coverage-bar ${isFull ? 'nf-coverage-success' : 'nf-coverage-warning'}" id="notes-coverage-bar">
+                <div class="nf-coverage-row">
+                    <span class="nf-coverage-badge">
+                        ${isFull ? '📘' : '⚠️'} ${esc(coverage.coverage_text || '')}
+                    </span>
+                </div>
+                ${!isFull && coverage.skipped_pages_text ? `
+                    <div class="nf-skipped-row">
+                        <span class="nf-skipped-text">${esc(coverage.skipped_pages_text)}</span>
+                        <button class="nf-btn-retry" type="button" title="Retry only the skipped sections">
+                            🔄 Retry Skipped Sections (${coverage.failed_sections.length})
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
     // Header
     page.insertAdjacentHTML('beforeend', `
         <div class="nf-page-header">
             <div class="nf-subject">${esc(data.subject || 'Study Notes')} ✱</div>
             <div class="nf-title">${esc(data.title)}</div>
             ${data.quote ? `<div class="nf-quote">"${esc(data.quote)}"</div>` : ''}
+            ${coverageHtml}
         </div>
     `);
 
+    // Wire up retry button if present
+    const retryBtn = page.querySelector('.nf-btn-retry');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const docId = window.activeDocumentId || (typeof activeDocumentId !== 'undefined' ? activeDocumentId : null);
+            if (!docId) {
+                alert('Please select a document first.');
+                return;
+            }
+            await handleRetryFailedSections(docId, data);
+        });
+    }
+
     // Sections
-    data.sections.forEach((sec, i) => {
+    (data.sections || []).forEach((sec, i) => {
         page.appendChild(buildSection(sec, i));
     });
 
@@ -262,7 +348,46 @@ function renderNotes(data) {
     }
 
     wrap.appendChild(page);
-    notesNotebook.appendChild(wrap);
+    return wrap;
+}
+
+async function handleRetryFailedSections(docId, existingNotes) {
+    const coverage = existingNotes && existingNotes.coverage;
+    if (!coverage || !coverage.failed_sections || !coverage.failed_sections.length) {
+        return;
+    }
+
+    const sectionIndices = coverage.failed_sections.map(s => s.section_index);
+    showNotesLoading(true);
+    setStep(`🔄 Retrying ${sectionIndices.length} skipped section(s)...`);
+
+    try {
+        const baseUrl = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+        const res = await fetch(`${baseUrl}/api/documents/${docId}/notes/retry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                section_indices: sectionIndices,
+                existing_notes: existingNotes,
+                detail_level: existingNotes.detail_level || 'standard'
+            })
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || errData.error || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (data.notes) {
+            renderNotes(data.notes);
+        }
+        showNotesLoading(false);
+    } catch (err) {
+        showNotesLoading(false);
+        alert('Retry failed: ' + err.message);
+        console.error(err);
+    }
 }
 
 function buildSection(sec, idx) {
