@@ -180,7 +180,8 @@ async def get_document_content(doc_id: str, repo: DocumentRepository = Depends(g
             except Exception:
                 pass
         
-        return {"document": doc_info, "chunks": chunks, "warning": warning}
+        lang = doc_info.get("language", "en") if doc_info else "en"
+        return {"document": doc_info, "chunks": chunks, "warning": warning, "language": lang}
     except HTTPException:
         raise
     except Exception as e:

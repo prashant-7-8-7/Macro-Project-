@@ -832,6 +832,17 @@ async function openDocument(docId, filename, sizeKB) {
     try {
         const data = await fetchDocumentContent(docId);
         window.currentDocWarning = data.warning || null;
+
+        // Show detected language badge next to Document ID
+        const langBadge = document.getElementById('viewer-lang-badge');
+        const langText = document.getElementById('viewer-lang-text');
+        const langCode = (data.language || (data.document && data.document.language) || 'en').toUpperCase();
+        if (langBadge && langText) {
+            langText.textContent = langCode;
+            langBadge.classList.remove('hidden');
+            langBadge.title = `Detected Language: ${langCode}`;
+        }
+
         renderDocumentContent(data.chunks, '', data.warning);
     } catch (err) {
         viewerContent.innerHTML = `<p style="color: #ef4444;">Error loading document content.</p>`;
@@ -843,6 +854,8 @@ function closeDocument() {
     window.activeDocumentId = null;
     window.activeDocumentFilename = null;
     window.currentDocWarning = null;
+    const langBadge = document.getElementById('viewer-lang-badge');
+    if (langBadge) langBadge.classList.add('hidden');
     emptyState.classList.remove('hidden');
     documentWorkspace.classList.add('hidden');
 }

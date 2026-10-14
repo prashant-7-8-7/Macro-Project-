@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from src.ingestion.parsers import DocumentParser
+from src.ingestion.detector import detect_document_language
 from src.ingestion.chunker import TextChunker
 from src.ai.embeddings import EmbeddingEngine
 from src.ai.vector_math import serialize_embedding
@@ -50,7 +51,12 @@ class IngestionPipeline:
         logger.info(f"Parsing document: {path.name}")
         pages, doc_warning = DocumentParser.parse(str(path))
         
+        # 1b. Language Detection
+        detected_lang = detect_document_language(pages)
+        logger.info(f"Detected document language: {detected_lang}")
+        
         doc_metadata = dict(metadata or {})
+        doc_metadata["language"] = detected_lang
         if doc_warning:
             doc_metadata["warning"] = doc_warning
         
@@ -68,13 +74,15 @@ class IngestionPipeline:
                     file_type=file_type,
                     file_size=file_size,
                     doc_hash=doc_hash,
-                    metadata=doc_metadata
+                    metadata=doc_metadata,
+                    language=detected_lang
                 )
                 return {
                     "status": "warning",
                     "document_id": doc_id,
                     "chunks_count": 0,
-                    "warning": doc_warning
+                    "warning": doc_warning,
+                    "language": detected_lang
                 }
             return {"status": "failed", "reason": "no_text_extracted"}
             
@@ -107,13 +115,19 @@ class IngestionPipeline:
             file_type=file_type,
             file_size=file_size,
             doc_hash=doc_hash,
-            metadata=doc_metadata
+            metadata=doc_metadata,
+            language=detected_lang
         )
         
         if success:
             self.repo.insert_chunks(db_chunks)
             logger.info(f"Successfully ingested {path.name} ({len(chunks)} chunks).")
-            res = {"status": "success", "document_id": doc_id, "chunks_count": len(chunks)}
+            res = {
+                "status": "success",
+                "document_id": doc_id,
+                "chunks_count": len(chunks),
+                "language": detected_lang
+            }
             if doc_warning:
                 res["warning"] = doc_warning
             return res

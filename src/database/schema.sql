@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS documents (
     file_type TEXT NOT NULL,
     file_size INTEGER NOT NULL,
     doc_hash TEXT UNIQUE NOT NULL,
+    language TEXT DEFAULT 'en',
     metadata_json TEXT DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

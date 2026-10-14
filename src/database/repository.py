@@ -7,22 +7,30 @@ class DocumentRepository:
     def __init__(self):
         pass
 
-    def insert_document(self, doc_id: str, title: str, filename: str, file_type: str, file_size: int, doc_hash: str, metadata: dict) -> bool:
-        """Inserts a new document. Returns True if inserted, False if hash already exists (duplicate)."""
+    def insert_document(self, doc_id: str, title: str, filename: str, file_type: str, file_size: int, doc_hash: str, metadata: dict, language: str = 'en') -> bool:
+        """Inserts a new document with detected language. Returns True if inserted, False if hash already exists (duplicate)."""
         conn = get_connection()
         try:
             conn.execute(
                 """
-                INSERT INTO documents (id, title, filename, file_type, file_size, doc_hash, metadata_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO documents (id, title, filename, file_type, file_size, doc_hash, language, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (doc_id, title, filename, file_type, file_size, doc_hash, json.dumps(metadata))
+                (doc_id, title, filename, file_type, file_size, doc_hash, language, json.dumps(metadata))
             )
             conn.commit()
             return True
         except sqlite3.IntegrityError:
             conn.rollback()
             return False # doc_hash is UNIQUE
+        finally:
+            conn.close()
+
+    def update_document_language(self, doc_id: str, language: str):
+        conn = get_connection()
+        try:
+            conn.execute("UPDATE documents SET language = ? WHERE id = ?", (language, doc_id))
+            conn.commit()
         finally:
             conn.close()
             
