@@ -398,114 +398,20 @@ def fallback_synthesize(prompt: str, q_lang: str = "en") -> str:
     return fallback_msgs.get(q_lang, fallback_msgs["en"])
 
 
-def generate_notes(doc_title: str, chunks: List[dict], doc_lang: Optional[str] = None) -> dict:
+def generate_notes(
+    doc_title: str,
+    chunks: List[dict],
+    doc_lang: Optional[str] = None,
+    detail_level: str = "standard"
+) -> dict:
     """
-    Generates beautifully formatted, structured study notes
-    from the document chunks (JSON format for notebook renderer) in the document's language.
+    Generates beautifully formatted, structured, scalable study notes
+    from document chunks using map-reduce (section-by-section extraction and merge).
     """
-    if not chunks:
-        return {
-            "notes": None,
-            "error": "No document content found to generate notes."
-        }
-
-    combined_text = "\n\n".join(
-        [c.get("content", "") for c in chunks]
-    )
-
-    if not doc_lang:
-        doc_lang = (chunks[0].get("language") if chunks else None) or detect_text_language(combined_text[:3000])
-    doc_lang_name = LANGUAGE_NAMES.get(doc_lang, doc_lang)
-
-    if len(combined_text) > 40000:
-        combined_text = (
-            combined_text[:40000]
-            + "... (truncated for length)"
-        )
-
-    title_hint = f'Title suggestion: "{doc_title}"' if doc_title else ''
-
-    prompt = f"""You are an expert student note-maker. Generate structured study notes in JSON from the document below.
-{title_hint}
-
-LANGUAGE REQUIREMENT:
-- Write ALL titles, section headings, content explanations, bullet points, keyBox items, tips, key takeaways, and remember facts in {doc_lang_name} (the document's language).
-- Keep the JSON structure and keys ("title", "subject", "quote", "sections", "number", "heading", "color", "layout", "content", "bullets", "keyBox", "items", "tip", "keyTakeaways", "remember") in English exactly as defined in the schema.
-
-RULES:
-1. Use ONLY information from the document.
-2. Return ONLY valid JSON — no markdown fences.
-3. Generate 4-7 sections.
-4. For "color": use one of: green, blue, red, orange, purple, teal (alternate them).
-5. For "layout": "full" (text+bullets), "split" (text+bullets LEFT, keyBox RIGHT).
-
-JSON structure:
-{{
-  "title": "{doc_title or 'Study Notes'}",
-  "subject": "Document Summary",
-  "quote": "Key quote under 100 chars",
-  "sections": [
-    {{
-      "number": 1,
-      "heading": "Section Heading",
-      "color": "green",
-      "layout": "split",
-      "content": "1-3 sentence explanation. Use **bold** for key terms.",
-      "bullets": ["Point one", "Point two"],
-      "keyBox": {{ "title": "⭐ Key Idea", "items": ["item 1", "item 2"] }},
-      "tip": "Remember: important tip"
-    }}
-  ],
-  "keyTakeaways": ["Takeaway 1", "Takeaway 2", "Takeaway 3"],
-  "remember": ["Fact 1", "Fact 2"]
-}}
-
-DOCUMENT:
-{combined_text}
-
-Return ONLY the raw JSON object."""
-
-    raw_response = call_llm(prompt)
-
-    if raw_response is None:
-        logger.warning("LLM unavailable for notes generation.")
-        return {
-            "notes": None,
-            "error": "AI is temporarily unavailable. Please verify API key configuration."
-        }
-
-    # Clean code fences
-    s = str(raw_response).strip()
-    s = s.replace("```json", "").replace("```JSON", "").replace("```", "").strip()
-    start = s.find('{')
-    end = s.rfind('}')
-    if start != -1 and end != -1 and end > start:
-        s = s[start:end+1]
-
-    try:
-        data = json.loads(s)
-        return {"notes": data}
-    except Exception as e:
-        logger.warning("Failed to parse JSON notes from LLM: %s", e)
-        # Fallback dictionary structure
-        return {
-            "notes": {
-                "title": doc_title or "Study Notes",
-                "subject": "Summary",
-                "quote": "Key concepts extracted from document",
-                "sections": [
-                    {
-                        "number": 1,
-                        "heading": "Overview",
-                        "color": "blue",
-                        "layout": "full",
-                        "content": s[:600],
-                        "bullets": ["Review complete document for details"],
-                        "keyBox": {"title": "Note", "items": ["Generated from document content"]},
-                        "tip": "Read original source for more context"
-                    }
-                ],
-                "keyTakeaways": ["Document parsed successfully"],
-                "remember": ["Review full document text"]
-            }
-        }
+    from src.ai.notes import generate_hierarchical_notes
+    return generate_hierarchical_notes(
+        chunks=chunks,
+        doc_title=doc_title,
+        detail_level=detail_level,
+        doc_lang=doc_lang,
+    )

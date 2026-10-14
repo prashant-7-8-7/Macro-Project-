@@ -189,9 +189,25 @@ async def get_document_content(doc_id: str, repo: DocumentRepository = Depends(g
 @app.post("/api/documents/{doc_id}/notes")
 async def create_document_notes(
     doc_id: str,
+    request: Request,
     repo: DocumentRepository = Depends(get_repo)
 ):
     try:
+        detail_level = "standard"
+        req_lang = None
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                detail_level = body.get("detail_level", "standard")
+                req_lang = body.get("language") or body.get("lang")
+        except Exception:
+            pass
+
+        if not req_lang:
+            req_lang = request.query_params.get("lang") or request.query_params.get("language")
+        if request.query_params.get("detail_level"):
+            detail_level = request.query_params.get("detail_level")
+
         chunks = repo.get_document_chunks_content(doc_id)
 
         if not chunks:
@@ -211,9 +227,14 @@ async def create_document_notes(
             if doc_info
             else "Document Notes"
         )
-        doc_lang = doc_info.get("language", "en") if doc_info else "en"
+        doc_lang = req_lang or (doc_info.get("language", "en") if doc_info else "en")
 
-        response = generate_notes(title, chunks, doc_lang=doc_lang)
+        response = generate_notes(
+            title,
+            chunks,
+            doc_lang=doc_lang,
+            detail_level=detail_level
+        )
 
         return {
             "document_id": doc_id,
