@@ -30,11 +30,18 @@ def main():
     # Init DB command
     subparsers.add_parser("init", help="Initialize the database")
 
+    # Reindex command
+    subparsers.add_parser("reindex", help="Re-embed all existing documents with the active multilingual model")
+
     args = parser.parse_args()
 
     if args.command == "init":
         init_db()
         print("Database initialized.")
+
+    elif args.command == "reindex":
+        from reindex import reindex_all_documents
+        reindex_all_documents()
         
     elif args.command == "ingest":
         init_db()

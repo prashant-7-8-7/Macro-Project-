@@ -63,3 +63,10 @@ CREATE TRIGGER IF NOT EXISTS fts_chunks_au AFTER UPDATE ON document_chunks BEGIN
   DELETE FROM fts_chunks WHERE chunk_id = old.id;
   INSERT INTO fts_chunks(chunk_id, document_id, content) VALUES (new.id, new.document_id, new.content);
 END;
+
+-- System Settings & Model Version Tracking
+CREATE TABLE IF NOT EXISTS system_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

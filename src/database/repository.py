@@ -58,6 +58,21 @@ class DocumentRepository:
             raise e
         finally:
             conn.close()
+
+    def update_chunk_embeddings(self, chunk_updates: List[Tuple[bytes, str]]):
+        """Batch updates embeddings for existing chunks: list of (embedding_blob, chunk_id)."""
+        conn = get_connection()
+        try:
+            conn.executemany(
+                "UPDATE document_chunks SET embedding = ? WHERE id = ?",
+                chunk_updates
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
             
     def get_all_documents(self) -> List[dict]:
         conn = get_connection()

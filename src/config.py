@@ -14,5 +14,5 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 
-# Embedding settings
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+# Embedding settings (multilingual by default, configurable via env var)
+EMBEDDING_MODEL_NAME = os.environ.get("EMBEDDING_MODEL_NAME", "paraphrase-multilingual-MiniLM-L12-v2")
