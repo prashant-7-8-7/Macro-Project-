@@ -19,6 +19,7 @@ class QuizQuestion(BaseModel):
     correct_answer: str
 
     topic: Optional[str] = None
+    explanation: Optional[str] = None
     difficulty: Optional[str] = None
     bloom_level: Optional[str] = None
 

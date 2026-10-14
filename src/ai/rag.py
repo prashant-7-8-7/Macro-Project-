@@ -179,14 +179,65 @@ def call_llm(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
     return None
 
 
+from src.ingestion.detector import detect_text_language
+
+LANGUAGE_NAMES = {
+    "en": "English",
+    "hi": "Hindi (हिंदी)",
+    "es": "Spanish (Español)",
+    "fr": "French (Français)",
+    "ar": "Arabic (العربية)",
+    "zh": "Chinese (中文)",
+    "ja": "Japanese (日本語)",
+    "ru": "Russian (Русский)",
+    "de": "German (Deutsch)",
+    "ta": "Tamil (தமிழ்)",
+    "bn": "Bengali (বাংলা)",
+    "pt": "Portuguese (Português)",
+    "it": "Italian (Italiano)",
+    "ko": "Korean (한국어)",
+    "tr": "Turkish (Türkçe)",
+    "ur": "Urdu (اردو)",
+}
+
+NO_CONTEXT_MESSAGES = {
+    "en": "No relevant documents found to answer your question.",
+    "hi": "आपके प्रश्न का उत्तर देने के लिए कोई प्रासंगिक दस्तावेज़ नहीं मिला।",
+    "es": "No se encontraron documentos relevantes para responder a su pregunta.",
+    "pt": "Nenhum documento relevante foi encontrado para responder à sua pergunta.",
+    "ar": "لم يتم العثور على مستندات ذات صلة للإجابة على سؤالك.",
+    "zh": "未找到相关文档来回答您的问题。",
+    "ja": "ご質問に答えるための関連ドキュメントが見つかりませんでした。",
+    "fr": "Aucun document pertinent n'a été trouvé pour répondre à votre question.",
+    "ru": "Не найдено релевантных документов для ответа на ваш вопрос.",
+    "de": "Keine relevanten Dokumente gefunden, um Ihre Frage zu beantworten.",
+    "ta": "உங்கள் கேள்விக்கு பதிலளிக்க தொடர்புடைய ஆவணங்கள் எதுவும் கிடைக்கவில்லை.",
+    "bn": "আপনার প্রশ্নের উত্তর দেওয়ার জন্য কোনো প্রাসঙ্গিক নথি পাওয়া যায়নি।",
+    "it": "Nessun documento rilevante trovato per rispondere alla tua domanda.",
+    "ko": "질문에 답변할 수 있는 관련 문서를 찾을 수 없습니다.",
+}
+
+AI_UNAVAILABLE_MESSAGES = {
+    "en": "*(AI is temporarily unavailable.)*\n\nThe document was successfully retrieved, but an AI-generated response could not be produced right now.",
+    "hi": "*(एआई अस्थायी रूप से अनुपलब्ध है।)*\n\nदस्तावेज़ सफलतापूर्वक प्राप्त कर लिया गया था, लेकिन अभी एआई द्वारा प्रतिक्रिया उत्पन्न नहीं की जा सकी।",
+    "es": "*(La IA no está disponible temporalmente.)*\n\nEl documento se recuperó con éxito, pero en este momento no se pudo producir una respuesta generada por IA.",
+    "ar": "*(الذكاء الاصطناعي غير متوفر مؤقتًا.)*\n\nتم استرداد المستند بنجاح، ولكن تعذر إنشاء استجابة بواسطة الذكاء الاصطناعي الآن.",
+    "zh": "*(AI服务暂时不可用。)*\n\n文档已成功检索，但目前无法生成AI回答。",
+    "ja": "*(AIは一時的に利用できません。)*\n\nドキュメントは正常に取得されましたが、現時点ではAIによる回答を生成できませんでした。"
+}
+
+
 def synthesize_answer(query: str, contexts: List[dict]) -> dict:
     """
     Given a query and a list of context chunks (with text, document name, page),
-    generates an answer using an LLM.
+    generates an answer using an LLM in the language of the query.
     """
+    q_lang = detect_text_language(query)
+    q_lang_name = LANGUAGE_NAMES.get(q_lang, q_lang)
+
     if not contexts:
         return {
-            "answer": "No relevant documents found to answer your question.",
+            "answer": NO_CONTEXT_MESSAGES.get(q_lang, NO_CONTEXT_MESSAGES["en"]),
             "citations": []
         }
 
@@ -225,9 +276,12 @@ def synthesize_answer(query: str, contexts: List[dict]) -> dict:
 You are an intelligent AI assistant. Use the following document context
 to answer the user's question.
 
+Language Requirement:
+- Respond in the language of the user's question ({q_lang_name}), unless the user explicitly requests another language.
+
 Rules:
 - Answer only from the provided document context.
-- If the answer cannot be found in the context, state that clearly.
+- If the answer cannot be found in the context, state that clearly in {q_lang_name} instead of guessing.
 - Do not invent facts.
 - Cite sources using the [Source N] format.
 
@@ -243,7 +297,7 @@ Answer:
 
     if answer is None:
         logger.warning("LLM unavailable. Using local Q&A fallback.")
-        answer = fallback_synthesize(prompt)
+        answer = fallback_synthesize(prompt, q_lang=q_lang)
 
     return {
         "answer": answer,
@@ -251,9 +305,9 @@ Answer:
     }
 
 
-def summarize_document(doc_title: str, chunks: List[dict]) -> dict:
+def summarize_document(doc_title: str, chunks: List[dict], doc_lang: Optional[str] = None) -> dict:
     """
-    Generates a full summary of a document based on its ordered chunks.
+    Generates a full summary of a document based on its ordered chunks in the document's language.
     """
     if not chunks:
         return {
@@ -265,6 +319,10 @@ def summarize_document(doc_title: str, chunks: List[dict]) -> dict:
         [c.get("content", "") for c in chunks]
     )
 
+    if not doc_lang:
+        doc_lang = (chunks[0].get("language") if chunks else None) or detect_text_language(combined_text[:3000])
+    doc_lang_name = LANGUAGE_NAMES.get(doc_lang, doc_lang)
+
     if len(combined_text) > 100000:
         combined_text = (
             combined_text[:100000]
@@ -274,6 +332,9 @@ def summarize_document(doc_title: str, chunks: List[dict]) -> dict:
     prompt = f"""
 Provide a comprehensive and well-structured summary of the following
 document titled "{doc_title}".
+
+Language Requirement:
+- Write the summary in the document's language ({doc_lang_name}), unless the user asked for a different language.
 
 Highlight:
 - key themes
@@ -290,14 +351,8 @@ Document Text:
     answer = call_llm(prompt)
 
     if answer is None:
-        logger.warning(
-            "LLM unavailable for summarization."
-        )
-        answer = (
-            "*(AI is temporarily unavailable.)*\n\n"
-            "The document was successfully retrieved, but an "
-            "AI-generated summary could not be produced right now."
-        )
+        logger.warning("LLM unavailable for summarization.")
+        answer = AI_UNAVAILABLE_MESSAGES.get(doc_lang, AI_UNAVAILABLE_MESSAGES["en"])
 
     return {
         "answer": answer,
@@ -305,23 +360,48 @@ Document Text:
     }
 
 
-def fallback_synthesize(prompt: str) -> str:
+def fallback_synthesize(prompt: str, q_lang: str = "en") -> str:
     """
     Local fallback when no LLM is available.
     """
-    return (
-        "*(AI is temporarily unavailable. "
-        "Showing retrieval fallback.)*\n\n"
-        "The system successfully retrieved relevant document "
-        "content, but an AI-generated conversational answer "
-        "could not be produced at this moment."
-    )
+    fallback_msgs = {
+        "en": (
+            "*(AI is temporarily unavailable. Showing retrieval fallback.)*\n\n"
+            "The system successfully retrieved relevant document "
+            "content, but an AI-generated conversational answer "
+            "could not be produced at this moment."
+        ),
+        "hi": (
+            "*(एआई अस्थायी रूप से अनुपलब्ध है। पुनःप्राप्ति फ़ॉलबैक दिखाया जा रहा है।)*\n\n"
+            "सिस्टम ने प्रासंगिक दस्तावेज़ सामग्री प्राप्त कर ली है, लेकिन इस समय "
+            "एआई-जनरेटेड संवादात्मक उत्तर तैयार नहीं किया जा सका।"
+        ),
+        "es": (
+            "*(La IA no está disponible temporalmente. Mostrando alternativa de recuperación.)*\n\n"
+            "El sistema recuperó correctamente el contenido relevante del documento, pero en este "
+            "momento no se pudo producir una respuesta conversacional generada por IA."
+        ),
+        "ar": (
+            "*(الذكاء الاصطناعي غير متوفر مؤقتًا. عرض المحتوى المسترجع بدلاً من ذلك.)*\n\n"
+            "استرجع النظام بنجاح محتوى المستند ذي الصلة، ولكن يتعذر إنتاج إجابة "
+            "محادثة تم إنشاؤها بواسطة الذكاء الاصطناعي في هذا الوقت."
+        ),
+        "zh": (
+            "*(AI服务暂时不可用。显示检索回退内容。)*\n\n"
+            "系统已成功检索到相关的文档内容，但目前无法生成AI对话回答。"
+        ),
+        "ja": (
+            "*(AIは一時的に利用できません。取得フォールバックを表示しています。)*\n\n"
+            "関連するドキュメントコンテンツは正常に取得されましたが、現時点ではAIによる回答を生成できませんでした。"
+        )
+    }
+    return fallback_msgs.get(q_lang, fallback_msgs["en"])
 
 
-def generate_notes(doc_title: str, chunks: List[dict]) -> dict:
+def generate_notes(doc_title: str, chunks: List[dict], doc_lang: Optional[str] = None) -> dict:
     """
     Generates beautifully formatted, structured study notes
-    from the document chunks (JSON format for notebook renderer).
+    from the document chunks (JSON format for notebook renderer) in the document's language.
     """
     if not chunks:
         return {
@@ -333,6 +413,10 @@ def generate_notes(doc_title: str, chunks: List[dict]) -> dict:
         [c.get("content", "") for c in chunks]
     )
 
+    if not doc_lang:
+        doc_lang = (chunks[0].get("language") if chunks else None) or detect_text_language(combined_text[:3000])
+    doc_lang_name = LANGUAGE_NAMES.get(doc_lang, doc_lang)
+
     if len(combined_text) > 40000:
         combined_text = (
             combined_text[:40000]
@@ -343,6 +427,10 @@ def generate_notes(doc_title: str, chunks: List[dict]) -> dict:
 
     prompt = f"""You are an expert student note-maker. Generate structured study notes in JSON from the document below.
 {title_hint}
+
+LANGUAGE REQUIREMENT:
+- Write ALL titles, section headings, content explanations, bullet points, keyBox items, tips, key takeaways, and remember facts in {doc_lang_name} (the document's language).
+- Keep the JSON structure and keys ("title", "subject", "quote", "sections", "number", "heading", "color", "layout", "content", "bullets", "keyBox", "items", "tip", "keyTakeaways", "remember") in English exactly as defined in the schema.
 
 RULES:
 1. Use ONLY information from the document.
@@ -383,7 +471,7 @@ Return ONLY the raw JSON object."""
         logger.warning("LLM unavailable for notes generation.")
         return {
             "notes": None,
-            "error": "AI is temporarily unavailable. Please verify GEMINI_API_KEY."
+            "error": "AI is temporarily unavailable. Please verify API key configuration."
         }
 
     # Clean code fences

@@ -46,7 +46,10 @@ def detect_text_language(text: str) -> str:
 
     sample = text.strip()[:3000]
 
-    # 1. Check distinct non-Latin scripts
+    # 1. Check distinct punctuation or non-Latin scripts
+    if '¿' in sample or '¡' in sample:
+        return 'es'
+
     script_lang = detect_by_script(sample)
 
     # 2. Try langdetect for high accuracy

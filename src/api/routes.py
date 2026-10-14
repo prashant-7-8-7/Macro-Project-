@@ -211,8 +211,9 @@ async def create_document_notes(
             if doc_info
             else "Document Notes"
         )
+        doc_lang = doc_info.get("language", "en") if doc_info else "en"
 
-        response = generate_notes(title, chunks)
+        response = generate_notes(title, chunks, doc_lang=doc_lang)
 
         return {
             "document_id": doc_id,
@@ -243,8 +244,9 @@ async def summarize_doc(doc_id: str, repo: DocumentRepository = Depends(get_repo
         docs = repo.get_all_documents()
         doc_info = next((d for d in docs if d['id'] == doc_id), None)
         title = doc_info['filename'] if doc_info else "Unknown Document"
+        doc_lang = doc_info.get("language", "en") if doc_info else "en"
         
-        response = summarize_document(title, chunks)
+        response = summarize_document(title, chunks, doc_lang=doc_lang)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
