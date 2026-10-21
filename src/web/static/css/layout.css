@@ -152,6 +152,8 @@
 /* --- COLUMN 2 & 3: MAIN WORKSPACE SHELL --- */
 .main-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -442,6 +444,13 @@ html[data-theme="dark"] .tab-btn.active {
   .viewer-header-top {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .viewer-title-group {
+    width: 100%;
+    max-width: 100%;
+  }
+  .workspace-center-column {
+    min-width: 0;
   }
   .workspace-tabs {
     width: 100%;

@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from src.database.db import get_connection
 
 class DocumentRepository:
@@ -43,6 +43,44 @@ class DocumentRepository:
             conn.commit()
         finally:
             conn.close()
+
+    def insert_document_with_chunks(self, *, chunks: List[Dict[str, Any]], **document) -> bool:
+        """Commit the document, chunks, and FTS entries together, or roll all back."""
+        conn = get_connection()
+        try:
+            with conn:
+                cursor = conn.execute(
+                    """INSERT INTO documents
+                    (id, title, filename, file_type, file_size, doc_hash, language, metadata_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(doc_hash) DO NOTHING""",
+                    (document["doc_id"], document["title"], document["filename"],
+                     document["file_type"], document["file_size"], document["doc_hash"],
+                     document.get("language", "en"), json.dumps(document.get("metadata", {}))),
+                )
+                if cursor.rowcount == 0:
+                    return False
+                conn.executemany(
+                    """INSERT INTO document_chunks
+                    (id, document_id, chunk_index, content, token_count, page_number, embedding)
+                    VALUES (:id, :document_id, :chunk_index, :content, :token_count, :page_number, :embedding)""",
+                    chunks,
+                )
+                for page in document.get('pages', []):
+                    if page.get('ocr_words'):
+                        conn.execute('INSERT INTO document_ocr VALUES (?,?,?)',
+                                     (document['doc_id'], page['page_number'], json.dumps(page['ocr_words'])))
+            return True
+        finally:
+            conn.close()
+
+    def get_document(self, document_id: str) -> Optional[dict]:
+        conn = get_connection()
+        try:
+            row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
             
     def get_document_by_hash(self, doc_hash: str) -> Optional[dict]:
         conn = get_connection()
@@ -69,7 +107,7 @@ class DocumentRepository:
         finally:
             conn.close()
 
-    def update_chunk_embeddings(self, chunk_updates: List[Tuple[bytes, str]]):
+    def update_chunk_embeddings(self, chunk_updates: List[Tuple[bytes, str]], profile: Optional[str] = None):
         """Batch updates embeddings for existing chunks: list of (embedding_blob, chunk_id)."""
         conn = get_connection()
         try:
@@ -77,6 +115,12 @@ class DocumentRepository:
                 "UPDATE document_chunks SET embedding = ? WHERE id = ?",
                 chunk_updates
             )
+            if profile:
+                documents = {row[0] for _, chunk_id in chunk_updates for row in conn.execute('SELECT document_id FROM document_chunks WHERE id=?', (chunk_id,))}
+                for ident in documents:
+                    row = conn.execute('SELECT metadata_json FROM documents WHERE id=?', (ident,)).fetchone()
+                    metadata = json.loads(row[0]); metadata['embedding_backend'] = profile
+                    conn.execute('UPDATE documents SET metadata_json=? WHERE id=?', (json.dumps(metadata), ident))
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -98,17 +142,20 @@ class DocumentRepository:
         conn.close()
         return rows
         
-    def get_all_chunks_with_embeddings(self) -> List[dict]:
+    def get_all_chunks_with_embeddings(self, filters: Optional[dict] = None) -> List[dict]:
         """Returns all chunks with their embeddings and parent document metadata."""
+        where, params = self._filter_sql(filters)
         conn = get_connection()
-        cursor = conn.execute('''
-            SELECT c.id, c.document_id, c.content, c.embedding, d.filename, c.page_number
-            FROM document_chunks c
-            JOIN documents d ON c.document_id = d.id
-        ''')
-        rows = [dict(r) for r in cursor.fetchall()]
-        conn.close()
-        return rows
+        try:
+            cursor = conn.execute('''
+                SELECT c.id, c.document_id, c.chunk_index, c.content, c.embedding,
+                       d.filename, d.file_type, d.language, d.metadata_json, c.page_number
+                FROM document_chunks c
+                JOIN documents d ON c.document_id = d.id
+            ''' + where, params)
+            return [dict(r) for r in cursor.fetchall()]
+        finally:
+            conn.close()
 
     def get_document_chunks_content(self, document_id: str) -> List[dict]:
         """Returns ordered chunks for a document to reconstruct text."""
@@ -121,47 +168,64 @@ class DocumentRepository:
         conn.close()
         return rows
 
-    def search_fts(self, query: str, top_k: int = 10, document_id: str = None) -> List[dict]:
+    @staticmethod
+    def _filter_sql(filters: Optional[dict], conjunction: str = "WHERE") -> Tuple[str, list]:
+        columns = {"document_id": "c.document_id", "filename": "d.filename",
+                   "file_type": "d.file_type", "language": "d.language",
+                   "page_number": "c.page_number"}
+        filters = filters or {}
+        scoped_ids = filters.get('document_ids')
+        filters = {key: value for key, value in filters.items() if key != 'document_ids'}
+        unknown = set(filters) - columns.keys()
+        if unknown:
+            raise ValueError("Unsupported search filter: " + ", ".join(sorted(unknown)))
+        clauses = [f"{columns[key]} = ?" for key in filters]
+        params = list(filters.values())
+        if scoped_ids is not None:
+            clauses.append('c.document_id IN (' + ','.join('?' for _ in scoped_ids) + ')' if scoped_ids else '0=1')
+            params.extend(scoped_ids)
+        return (f" {conjunction} " + " AND ".join(clauses), params) if clauses else ("", [])
+
+    def search_fts(self, query: str, top_k: int = 10, document_id: str = None,
+                   filters: Optional[dict] = None) -> List[dict]:
         """Performs BM25 Full-Text Search using SQLite FTS5."""
-        conn = get_connection()
         # Escape query for FTS (remove quotes to prevent syntax errors)
         safe_words = [w.replace('"', '') for w in query.split() if w.strip()]
         escaped_query = ' '.join(f'"{word}"' for word in safe_words if word)
         
         if not escaped_query:
             return []
-            
-        if document_id:
+        scoped_filters = dict(filters or {})
+        if document_id is not None:
+            scoped_filters["document_id"] = document_id
+        where, params = self._filter_sql(scoped_filters, "AND")
+        conn = get_connection()
+        try:
             cursor = conn.execute("""
-                SELECT c.id, c.document_id, c.content, d.filename, c.page_number, bm25(fts_chunks) as rank_score
-                FROM fts_chunks f
-                JOIN document_chunks c ON f.chunk_id = c.id
-                JOIN documents d ON c.document_id = d.id
-                WHERE fts_chunks MATCH ? AND c.document_id = ?
-                ORDER BY rank_score
-                LIMIT ?
-            """, (escaped_query, document_id, top_k))
-        else:
-            cursor = conn.execute("""
-                SELECT c.id, c.document_id, c.content, d.filename, c.page_number, bm25(fts_chunks) as rank_score
+                SELECT c.id, c.document_id, c.chunk_index, c.content, d.filename,
+                       d.file_type, d.language, c.page_number, bm25(fts_chunks) as rank_score
                 FROM fts_chunks f
                 JOIN document_chunks c ON f.chunk_id = c.id
                 JOIN documents d ON c.document_id = d.id
                 WHERE fts_chunks MATCH ?
+            """ + where + """
                 ORDER BY rank_score
                 LIMIT ?
-            """, (escaped_query, top_k))
-            
-        rows = [dict(r) for r in cursor.fetchall()]
-        conn.close()
-        return rows
+            """, [escaped_query, *params, top_k])
+            return [dict(r) for r in cursor.fetchall()]
+        finally:
+            conn.close()
 
     def delete_document(self, document_id: str):
+        original = self.get_document(document_id)
         conn = get_connection()
         try:
             # ON DELETE CASCADE handles document_chunks, and trigger handles fts_chunks
             conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
             conn.commit()
+            if original:
+                from src.ingestion.ocr import original_path
+                original_path(original).unlink(missing_ok=True)
         except Exception as e:
             conn.rollback()
             raise e

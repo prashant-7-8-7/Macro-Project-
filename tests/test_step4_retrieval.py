@@ -1,4 +1,7 @@
 import sys
+import pytest
+
+pytestmark = pytest.mark.integration
 from pathlib import Path
 import numpy as np
 

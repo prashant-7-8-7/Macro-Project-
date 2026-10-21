@@ -1,0 +1,16 @@
+name: Offline regression tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install lightweight test dependencies
+        run: >-
+          python -m pip install 'fastapi>=0.115,<1' 'pydantic>=2,<3'
+          python-multipart jinja2 numpy python-dotenv langdetect
+          python-docx pypdf PyMuPDF Pillow scikit-learn pytest httpx
+      - run: python -m pytest -q

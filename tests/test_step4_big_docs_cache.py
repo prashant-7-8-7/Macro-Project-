@@ -220,9 +220,10 @@ class TestStep4BigDocsCache(unittest.TestCase):
         self.assertTrue(completed, "Background job should complete within 10 seconds")
         self.repo.delete_document(doc_id)
 
-    @patch("src.ai.rag.generate_notes")
+    @patch("src.ai.notes.generate_hierarchical_notes")
     def test_api_notes_background_mode(self, mock_gen):
         """Test API endpoint with background=true returns job_id and job can be queried."""
+        mock_gen.return_value = {"notes": {"sections": []}}
         # Insert a dummy document in DB
         doc_id = "test_bg_endpoint_doc"
         try:
@@ -267,6 +268,15 @@ class TestStep4BigDocsCache(unittest.TestCase):
         job_data = job_res.json()
         self.assertIn(job_data["status"], ("pending", "running", "completed"))
 
+        # Keep the mock and database alive until the worker has finished.
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            job_data = self.client.get(f"/api/documents/{doc_id}/notes/jobs/{job_id}").json()
+            if job_data["status"] in ("completed", "failed"):
+                break
+            time.sleep(0.01)
+        self.assertEqual(job_data["status"], "completed")
+        mock_gen.assert_called_once()
         # Clean up
         self.repo.delete_document(doc_id)
 

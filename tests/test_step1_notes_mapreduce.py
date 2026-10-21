@@ -1,4 +1,5 @@
 import sys
+import pytest
 from pathlib import Path
 
 # Add project root to sys.path
@@ -88,6 +89,7 @@ def test_detail_level_configurations():
     print("[OK] test_detail_level_configurations passed")
 
 
+@pytest.mark.integration
 def test_hierarchical_notes_integration():
     """Verify end-to-end integration of generate_hierarchical_notes."""
     chunks = [

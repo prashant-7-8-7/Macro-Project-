@@ -13,7 +13,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
-    sqlite3 \
+    sqlite3 tesseract-ocr tesseract-ocr-eng tesseract-ocr-hin \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PyTorch CPU-only first to prevent downloading giant multi-gigabyte CUDA binaries on Render
@@ -24,7 +24,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download sentence transformer model during Docker build so startup is instant
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+ARG EMBEDDING_MODEL_NAME=paraphrase-multilingual-MiniLM-L12-v2
+ENV EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}
+RUN python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['EMBEDDING_MODEL_NAME'])"
 
 # Copy the rest of the application code
 COPY . .
