@@ -27,3 +27,4 @@
 @media(max-width:768px){.subject-controls{padding:8px 16px}.sidebar{max-height:60dvh}.sidebar:not(.collapsed) .documents-section{min-height:130px}.sidebar .upload-section{padding:8px 16px}.sidebar .upload-prompt{min-height:70px;padding:12px}.study-card{padding:14px}.study-table{font-size:.78rem}.chat-study-controls{padding:12px}.pdf-preview{max-height:45vh}.workspace-tabs .tab-btn{padding:.5rem .35rem;font-size:.76rem}}
 
 .sidebar.collapsed .subject-controls{display:none}
+.study-dialog label.study-check{display:flex;align-items:center}
