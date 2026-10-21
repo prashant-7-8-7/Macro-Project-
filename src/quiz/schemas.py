@@ -6,6 +6,7 @@ class QuizGenerateRequest(BaseModel):
     document_id: str
     num_questions: int = Field(default=10, ge=1, le=30)
     difficulty: Literal["easy", "medium", "hard", "mixed"] = "mixed"
+    focus_weak_topics: bool = False
 
 
 class QuizOption(BaseModel):
@@ -25,6 +26,7 @@ class QuizQuestion(BaseModel):
 
     source_page: Optional[int] = None
     source_chunk_id: Optional[str] = None
+    source_quote: Optional[str] = None
 
     grounding_score: float = Field(default=0.0, ge=0.0, le=1.0)
     status: Literal["verified", "rejected", "needs_review"] = "needs_review"
@@ -33,6 +35,7 @@ class QuizQuestion(BaseModel):
 
 
 class QuizResponse(BaseModel):
+    quiz_id: Optional[str] = None
     document_id: str
     questions: List[QuizQuestion]
     generated_count: int

@@ -109,66 +109,47 @@ def validate_question(
     if len(labels) != len(set(labels)):
         reasons.append("Duplicate answer options detected.")
 
-    # 6. Source grounding with resilient resolution
-    valid_chunk_indexes = {
-        str(context.get("chunk_index"))
-        for context in contexts
-    }
+    # A valid chunk ID alone is not evidence that the answer is supported.
+    def evidence_text(text):
+        return " ".join(unicodedata.normalize("NFKC", text or "").casefold().split())
 
-    raw_chunk_id = str(question.source_chunk_id).strip() if question.source_chunk_id is not None else ""
-    matched_chunk_idx = None
+    def contains_answer(content):
+        answer = re.sub(r"^[A-Da-d][).:]\s+", "", question.correct_answer.strip())
+        answer = evidence_text(answer)
+        content = evidence_text(content)
+        if not answer:
+            return False
+        # CJK phrases occur inside unsegmented sentences; other scripts use word boundaries.
+        if re.search(r"[\u3400-\u9fff\u3040-\u30ff]", answer):
+            return answer in content
+        return bool(re.search(r"(?<!\w)" + re.escape(answer) + r"(?!\w)", content))
 
-    if raw_chunk_id in valid_chunk_indexes:
-        matched_chunk_idx = raw_chunk_id
+    raw_chunk_id = str(question.source_chunk_id or "").strip()
+    quote = evidence_text(question.source_quote)
+    q_features = _extract_grounding_features(question.question)
+    candidates = []
+    for ctx in contexts:
+        content = ctx.get("content", "")
+        if not contains_answer(content):
+            continue
+        if quote and (quote not in evidence_text(content) or not contains_answer(question.source_quote)):
+            continue
+        overlap = len(q_features & _extract_grounding_features(content))
+        if overlap == 0:
+            continue
+        # Prefer a correctly cited chunk when it actually supports the answer.
+        score = overlap + (5 if str(ctx.get("chunk_index")) == raw_chunk_id else 0)
+        candidates.append((score, ctx))
+
+    if candidates:
+        source = max(candidates, key=lambda item: item[0])[1]
+        question.source_chunk_id = str(source.get("chunk_index", 0))
+        question.source_page = source.get("page_number", 1)
+        if not question.source_quote:
+            # Older callers remain compatible; new generation requests supply excerpts.
+            question.source_quote = None
     else:
-        digits = re.findall(r'\d+', raw_chunk_id)
-        if digits:
-            d_val = digits[0]
-            if d_val in valid_chunk_indexes:
-                matched_chunk_idx = d_val
-            elif str(int(d_val) - 1) in valid_chunk_indexes:
-                # 1-based mapped to 0-based
-                matched_chunk_idx = str(int(d_val) - 1)
-
-    # If single-chunk document, all questions naturally ground to this chunk
-    if matched_chunk_idx is None and len(contexts) == 1:
-        matched_chunk_idx = str(contexts[0].get("chunk_index", 0))
-
-    # If multiple chunks, ground using Unicode-safe token and n-gram overlap
-    if matched_chunk_idx is None and contexts:
-        q_features = _extract_grounding_features(question.question + " " + question.correct_answer)
-        norm_ans = _normalize_text(question.correct_answer)
-        best_chunk = None
-        best_score = 0
-
-        for ctx in contexts:
-            content = ctx.get("content", "")
-            norm_content = unicodedata.normalize("NFKC", content).lower()
-            chunk_features = _extract_grounding_features(content)
-            overlap = len(q_features & chunk_features)
-
-            # Bonus score if normalized correct answer directly appears in chunk
-            bonus = 10 if (len(norm_ans) >= 2 and norm_ans in norm_content) else 0
-            score = overlap + bonus
-
-            if score > best_score:
-                best_score = score
-                best_chunk = ctx
-
-        if best_chunk and best_score >= 1:
-            matched_chunk_idx = str(best_chunk.get("chunk_index", 0))
-            if question.source_page is None:
-                question.source_page = best_chunk.get("page_number", 1)
-
-    if matched_chunk_idx is not None:
-        question.source_chunk_id = matched_chunk_idx
-        if question.source_page is None:
-            for ctx in contexts:
-                if str(ctx.get("chunk_index")) == matched_chunk_idx:
-                    question.source_page = ctx.get("page_number", 1)
-                    break
-    else:
-        reasons.append("Referenced source chunk does not exist.")
+        reasons.append("Correct answer and supporting excerpt could not be found together in a source chunk.")
 
     # Final decision
     if reasons:

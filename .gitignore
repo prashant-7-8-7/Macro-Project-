@@ -35,4 +35,10 @@ requirements_utf8.txt
 data/uploads/*
 !data/uploads/.gitkeep
 documents.db
+documents.db-wal
+documents.db-shm
+.pytest_cache/
+node_modules/
 scratch/
+
+data/originals/

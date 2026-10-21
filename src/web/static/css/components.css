@@ -1584,11 +1584,37 @@ mark.search-highlight.active-match {
 }
 
 .status-dot {
+  background-color: var(--text-muted);
   width: 8px;
   height: 8px;
   border-radius: var(--radius-full);
   display: inline-block;
   flex-shrink: 0;
+}
+
+.citation-source-btn {
+  font: inherit;
+  color: var(--brand-indigo);
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  cursor: pointer;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.quiz-source-quote {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-inline-start: 3px solid var(--brand-indigo);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.viewer-chunk:focus {
+  outline: 2px solid var(--brand-indigo);
+  outline-offset: 4px;
 }
 
 .status-dot.online {

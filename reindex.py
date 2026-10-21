@@ -62,7 +62,7 @@ def reindex_all_documents(batch_size: int = 64) -> int:
 
     # Commit updates to database
     print("Writing updated embeddings to database...")
-    repo.update_chunk_embeddings(updates)
+    repo.update_chunk_embeddings(updates, profile=engine.profile)
     set_system_metadata("embedding_model", EMBEDDING_MODEL_NAME)
 
     elapsed = time.time() - start_time

@@ -16,7 +16,13 @@ logger = logging.getLogger(__name__)
 class IngestionPipeline:
     def __init__(self):
         self.repo = DocumentRepository()
-        self.embedding_engine = EmbeddingEngine()
+        self._embedding_engine = None
+
+    @property
+    def embedding_engine(self):
+        if self._embedding_engine is None:
+            self._embedding_engine = EmbeddingEngine()
+        return self._embedding_engine
         
     def _compute_hash(self, file_path: str) -> str:
         hasher = hashlib.sha256()
@@ -90,6 +96,9 @@ class IngestionPipeline:
         logger.info(f"Generating embeddings for {len(chunks)} chunks...")
         texts_to_embed = [c['content'] for c in chunks]
         embeddings_matrix = self.embedding_engine.embed_texts(texts_to_embed)
+        profile = getattr(self.embedding_engine, 'profile', None)
+        if isinstance(profile, str):
+            doc_metadata['embedding_backend'] = profile
         
         # 4. Prepare for DB
         db_chunks = []
@@ -108,7 +117,7 @@ class IngestionPipeline:
             
         # 5. Insert to DB Transactionally
         logger.info("Inserting into Relational SQL Database...")
-        success = self.repo.insert_document(
+        success = self.repo.insert_document_with_chunks(
             doc_id=doc_id,
             title=title,
             filename=path.name,
@@ -116,11 +125,12 @@ class IngestionPipeline:
             file_size=file_size,
             doc_hash=doc_hash,
             metadata=doc_metadata,
-            language=detected_lang
+            language=detected_lang,
+            chunks=db_chunks,
+            pages=pages,
         )
         
         if success:
-            self.repo.insert_chunks(db_chunks)
             logger.info(f"Successfully ingested {path.name} ({len(chunks)} chunks).")
             res = {
                 "status": "success",
@@ -132,4 +142,7 @@ class IngestionPipeline:
                 res["warning"] = doc_warning
             return res
         else:
-            return {"status": "failed", "reason": "db_insert_error"}
+            existing = self.repo.get_document_by_hash(doc_hash)
+            if existing:
+                return {"status": "skipped", "reason": "duplicate", "document_id": existing["id"]}
+            raise RuntimeError("Document could not be saved")

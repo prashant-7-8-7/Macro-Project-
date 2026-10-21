@@ -13,6 +13,7 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%234f46e5'/><stop offset='50%25' stop-color='%237c3aed'/><stop offset='100%25' stop-color='%23ec4899'/></linearGradient></defs><rect width='100' height='100' rx='28' fill='url(%23g)'/><path d='M30 35h40M30 50h40M30 65h24' stroke='%23ffffff' stroke-width='8' stroke-linecap='round'/><circle cx='68' cy='65' r='5' fill='%23ffffff'/></svg>">
 
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/study.css">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -78,7 +79,7 @@
 
             <div class="upload-section" id="upload-zone" role="region" aria-label="Document upload dropzone" tabindex="0">
 
-                <input type="file" id="file-input" class="hidden-input" accept=".pdf,.txt,.docx,.csv,.json" aria-label="Upload document file">
+                <input type="file" id="file-input" class="hidden-input" accept=".pdf,.txt,.md,.docx,.csv,.json" aria-label="Upload document file">
 
                 <div class="upload-prompt">
 
@@ -86,7 +87,7 @@
 
                     <p>Drag & Drop or Click to Upload</p>
 
-                    <span class="file-types">PDF, TXT, DOCX</span>
+                    <span class="file-types">PDF, TXT, MD, DOCX, CSV, JSON</span>
 
                 </div>
 
@@ -102,6 +103,12 @@
                 </div>
             </div>
 
+            <div class="subject-controls">
+                <label for="subject-filter">Subject</label>
+                <div class="study-row"><select id="subject-filter"><option value="">All documents</option></select>
+                <button id="subject-create" type="button" class="btn-primary-outline">New</button></div>
+                <button id="subject-manage" type="button" class="btn-primary-outline">Choose documents for subject</button>
+            </div>
             <div class="documents-section">
                 <div class="documents-section-header">
                     <h3>Library</h3>
@@ -186,6 +193,7 @@
                                     <i class="fa-solid fa-pen-nib"></i>
                                     <span>Study Notes</span>
                                 </button>
+                                <button id="tab-btn-study" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-panel-study">Study</button>
                             </nav>
                         </div>
 
@@ -202,6 +210,11 @@
 
                     <!-- Tab Panel 1: Document Chunks Viewer -->
                     <section id="tab-panel-document" class="tab-panel active document-viewer">
+                        <div class="pdf-preview-tools"><button id="pdf-preview-toggle" type="button" class="btn-primary-outline">Original PDF</button></div>
+                        <div id="pdf-preview" class="pdf-preview hidden">
+                            <div class="study-row"><button id="pdf-prev" type="button">Previous</button><label>Page <input id="pdf-page" type="number" min="1" value="1"></label><button id="pdf-next" type="button">Next</button><span id="pdf-evidence-status" role="status"></span></div>
+                            <img id="pdf-page-image" alt="Original PDF page with supporting text highlighted when found">
+                        </div>
                         <div class="viewer-content" id="viewer-content">
                             <div class="skeleton-loader">
                                 <div class="line"></div>
@@ -273,6 +286,7 @@
                             </button>
                         </div>
 
+                        <label class="study-check"><input id="quiz-focus-weak" type="checkbox"> Focus on topics I answered incorrectly</label>
                         <!-- Quiz generation status -->
                         <div id="quiz-status" class="quiz-status hidden"></div>
 
@@ -282,6 +296,15 @@
                         </div>
                     </section>
 
+                    <section id="tab-panel-study" class="tab-panel quiz-maker hidden" role="tabpanel" aria-labelledby="tab-btn-study">
+                        <header class="quiz-header"><div><h3>Your study progress</h3><p>Saved quiz attempts, weak topics, and a revision queue for the open document.</p></div></header>
+                        <div id="study-progress" class="study-card" aria-live="polite">Choose a document to begin.</div>
+                        <div class="study-card"><h3>Flashcards</h3><p>Turn mistakes into revision cards without another AI request, or generate new source-checked cards.</p>
+                            <div class="study-row"><button id="cards-from-mistakes" type="button">Cards from mistakes</button><button id="cards-generate" type="button">Generate 8 cards</button><button id="cards-refresh" type="button">Refresh due cards</button></div>
+                            <div id="flashcard-review" aria-live="polite"></div>
+                        </div>
+                        <details class="study-card"><summary>AI usage · free-only</summary><p>Gemini and Groq are used only after you confirm a free-tier account during setup. Account billing cannot be verified from an API key.</p><div id="ai-usage"></div><button id="usage-refresh" type="button">Refresh usage</button></details>
+                    </section>
                     <!-- Tab Panel 3: Study Notes -->
                     <section id="tab-panel-notes" class="tab-panel quiz-maker hidden" role="tabpanel" aria-labelledby="tab-btn-notes">
                         <header class="quiz-header">
@@ -333,6 +356,10 @@
                             </div>
                         </header>
 
+                        <div class="notes-edit-toolbar study-row">
+                            <button id="notes-edit-open" type="button" class="btn-primary-outline">Edit a section</button>
+                            <label>Saved versions <select id="notes-versions"><option value="">Choose version</option></select></label>
+                        </div>
                         <!-- Background Job Progress Bar (reusing existing progress styles) -->
                         <div id="notes-progress-container" class="upload-progress" style="display:none;padding:16px 20px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);margin-bottom:14px;">
                             <div class="upload-progress-header" style="margin-bottom:6px;">
@@ -369,7 +396,7 @@
             <section class="ai-assistant">
                 <header class="assistant-header">
                     <div class="assistant-title-group">
-                        <h3><i class="fa-solid fa-sparkles"></i> AI Assistant <span class="status-dot online" title="Connected to Google Gemini AI" aria-label="Online"></span></h3>
+                        <h3><i class="fa-solid fa-sparkles"></i> AI Assistant <span id="ai-status" class="status-dot" title="AI responds when a document question is submitted" aria-label="AI status not checked" role="status"></span></h3>
                     </div>
                     <div class="assistant-actions">
                         <button id="btn-make-notes" class="btn-primary-outline" title="Generate handwritten study notes">
@@ -384,6 +411,12 @@
                     </div>
                 </header>
 
+                <div class="chat-study-controls">
+                    <div class="study-row"><label for="chat-answer-style">Answer format</label><select id="chat-answer-style"><option value="general">General</option><option value="simple">Explain in 2 minutes</option><option value="2_marks">2-mark answer</option><option value="6_marks">6-mark answer</option><option value="10_marks">10-mark answer</option><option value="formulas">Formulas and symbols</option></select></div>
+                    <div class="study-row"><label for="chat-sessions">Conversation</label><select id="chat-sessions"><option value="">New conversation</option></select><button id="chat-new" type="button">New</button></div>
+                    <details><summary>Choose documents for this conversation</summary><div id="chat-document-scope"></div></details>
+                    <button id="chat-stop" type="button" class="hidden">Stop generating</button>
+                </div>
                 <div class="chat-container" id="chat-container" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation with AI Assistant">
                     <div class="chat-message ai-message">
                         <div class="avatar">
@@ -754,9 +787,18 @@
     @media print { #notes-modal{position:relative!important;background:white!important;} #notes-btn-close,#notes-btn-print,#notes-btn-copy,#notes-btn-download,#tab-btn-print-notes,#tab-btn-copy-notes,#tab-btn-download-notes,#notes-progress-container,.nf-dual-toolbar{display:none!important;} }
     </style>
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <dialog id="subject-dialog" class="study-dialog"><form method="dialog"><h3>Subject documents</h3><div id="subject-document-options"></div><div class="study-row"><button id="subject-save" type="button">Save subject</button><button>Cancel</button></div></form></dialog>
+    <dialog id="notes-editor" class="study-dialog"><form method="dialog"><h3>Edit study notes</h3>
+        <label>Language view<select id="editor-view"><option value="original">Original</option><option value="english">English</option></select></label>
+        <label>Section<select id="editor-section"></select></label><label>Heading<input id="editor-heading" maxlength="300"></label>
+        <label>Explanation<textarea id="editor-content" rows="7"></textarea></label><label>Points (one per line)<textarea id="editor-bullets" rows="5"></textarea></label><label>Study tip<input id="editor-tip" maxlength="1000"></label>
+        <div class="study-row"><button id="editor-save" type="button">Save new version</button><button id="editor-regenerate" type="button">Regenerate this section</button><button>Close</button></div><p id="editor-status" role="status"></p>
+    </form></dialog>
+    <script src="/static/vendor/marked/marked.umd.js"></script>
+    <script src="/static/vendor/dompurify/purify.min.js"></script>
     <script src="/static/js/app.js"></script>
     <script src="/static/js/notes.js"></script>
+    <script src="/static/js/study.js"></script>
 
 </body>
 

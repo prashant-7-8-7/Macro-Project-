@@ -1,6 +1,6 @@
 # Workspace — AI Document Intelligence & Study Platform
 
-A premium, production-grade AI Document Workspace powered by **FastAPI**, **Google Gemini**, **PyTorch GPU sentence-transformers**, and modern vanilla web standards. Transform your documents (PDF, TXT, DOCX, CSV) into interactive study companions with contextual retrieval-augmented generation (RAG), automated quiz generation, and realistic handwritten study notes.
+An AI Document Workspace built with **FastAPI**, **SQLite**, **Gemini/Groq/OpenRouter**, local sentence-transformer embeddings, and vanilla JavaScript. Transform your documents (PDF, TXT, DOCX, CSV) into interactive study companions with contextual retrieval-augmented generation (RAG), automated quiz generation, and realistic handwritten study notes.
 
 ---
 
@@ -14,7 +14,7 @@ A premium, production-grade AI Document Workspace powered by **FastAPI**, **Goog
 
 ### 📐 Ergonomic 3-Column Workspace Shell
 - **Collapsible Sidebar**: Smooth width transitions, document dropzone with animated upload progress bar, and real-time library search filter.
-- **Document & Quiz Tabs**: Seamless tab switcher (`Document | Quiz Maker | Study Notes`) keeping all workflows centralized and focused.
+- **Document & Quiz Tabs**: Seamless tab switcher (`Document | Quiz Maker | Study Notes | Study`) keeping all workflows centralized and focused.
 - **Draggable AI Panel Resizer**: Interactive horizontal resize handle with width persistence across browser sessions.
 - **Full Responsiveness**: Mobile-optimized shell with drawer navigation and full-width card stacks.
 
@@ -32,7 +32,7 @@ A premium, production-grade AI Document Workspace powered by **FastAPI**, **Goog
 
 ### 🤖 AI Assistant & Study Notes
 - **Contextual Chat**: Grounded Q&A against document chunks via Gemini RAG.
-- **Rich Message Actions**: Markdown rendering, code block copy button, typewriter stream, suggested-question chips, copy response, and regenerate reply.
+- **Rich Message Actions**: Markdown rendering, code block copy button, provider answer streaming with a Stop button, suggested-question chips, copy response, and regenerate reply.
 - **Handwritten Study Notes**: Realistic lined-paper notebook generation with customizable color themes and print/PDF export.
 
 ### ⚡ Delight & Keyboard Shortcuts
@@ -70,8 +70,8 @@ A premium, production-grade AI Document Workspace powered by **FastAPI**, **Goog
 ### 1. Clone & Set Up Virtual Environment
 
 ```bash
-git clone https://github.com/your-username/macro-project.git
-cd "Macro Project"
+git clone https://github.com/prashant-7-8-7/Macro-Project-.git
+cd Macro-Project-
 
 # Create virtual environment
 python -m venv venv
@@ -93,10 +93,11 @@ pip install -r requirements.txt
 
 ### 3. Configure Environment Variables
 
-Create a `.env` file in the root directory:
+Copy `.env.example` to `.env` in the root directory, then configure at least one eligible provider. No credentials belong in frontend files:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+# The OpenRouter free router uses only free models.
+OPENROUTER_API_KEY=your_openrouter_api_key
 PORT=8000
 ```
 
@@ -107,3 +108,45 @@ python main.py
 ```
 
 Open your browser at **`http://127.0.0.1:8000`** to access the workspace.
+
+### Workflow reliability improvements
+
+This update keeps the existing Gemini/Groq/OpenRouter workflow and environment variables.
+
+- Quizzes rotate source sampling across long documents and avoid stems from previous retry attempts.
+- A valid chunk ID alone no longer verifies an answer. Answer wording and any supplied supporting excerpt must occur together in a source chunk; page/chunk references are corrected from the matched source.
+- New quiz questions include an escaped supporting excerpt in the existing explanation panel. This is a text-evidence check, not a guarantee of semantic correctness.
+- Identical active notes requests share one job. At most two notes jobs run simultaneously, with eight pending/running requests allowed and retryable HTTP 429 responses when full.
+- Uploads use isolated temporary paths, configurable size limits, and cleanup. Document/chunk indexing commits atomically.
+- Document filters are applied before retrieval limits. Long AI calls run outside the main async request loop.
+- Chat HTML is sanitized, citations navigate to source chunks, and provider credentials stay with their own services.
+
+Existing local/Render/Vercel API routing is retained. An optional `window.WORKSPACE_API_URL` override can point a separately hosted frontend at another backend. `CORS_ORIGINS` optionally restricts allowed frontend origins; existing deployments need no new configuration.
+
+Run regression checks with `pip install -r requirements-dev.txt` followed by `python -m pytest -q`. Tests use disposable SQLite databases. Model-dependent checks are excluded by default; run them separately with `python -m pytest -q -m integration` after configuring the models/API. Optional browser checks use `node tests/browser_upgrade.cjs` with Playwright/Chromium installed and the application running.
+
+
+### Study workflow upgrades
+
+The existing interface, providers, SQLite database, and deployment entry points are retained. There is no Ollama dependency.
+
+- **Saved conversations:** completed answers and citations persist across restarts. Follow-up questions receive the last six messages as context. Choose General, Explain simply, 2/6/10 marks, or Formulas. Answer lengths are prompt guidance, not guaranteed marking schemes.
+- **Subjects and document scope:** create a subject and choose its documents. In chat, expand “Choose documents” to compare up to 20 documents. Changing scope starts a fresh conversation. Subjects organize documents without duplicating them.
+- **Quiz progress:** completed attempts are scored by the server and saved once. Retry creates a separate attempt using the same questions without another AI call. “Focus on weak topics” samples chunks associated with earlier mistakes. The Study tab shows topic accuracy and recent attempts.
+- **Flashcard review:** create cards from mistakes without an AI call, or generate source-checked cards. Reveal an answer and rate Again, Hard, Good, or Easy. Again returns after ten minutes; other ratings schedule later days. This is a simple revision schedule, not a scientifically calibrated mastery score.
+- **Editable notes:** generated notes save on the server even if the browser closes after starting a job. Edit a section, regenerate only that section, and restore earlier saved versions. Keep the page open until a selected-section retry is saved. Jobs themselves are in memory and do not survive a server restart.
+- **PDF evidence:** uploaded PDFs retain an original copy. Citation buttons show the actual page and highlight matching native text or OCR words where possible. Older uploads need uploading again to retain their originals. TXT/DOCX citations still navigate to extracted text.
+- **Local OCR:** optional Tesseract reads scanned PDF pages; no OCR service or API key is required. Install Tesseract and its language packs locally, then set `OCR_LANGUAGES` (for example `eng+hin`). Docker includes English and Hindi. The default `OCR_MAX_PAGES=10` limits OCR work per upload; poor scans and missing language packs show extraction warnings.
+- **Streaming:** chat displays real provider deltas and supports Stop. Failed/stopped partial responses are not deliberately saved as completed answers or cached; the submitted user message remains in history. Cached completed answers arrive immediately.
+
+### Free-tier configuration and limits
+
+OpenRouter is pinned to `openrouter/free`; a paid model override is ignored. Gemini and Groq are disabled unless their respective `*_FREE_TIER_CONFIRMED=true` flags are set in `.env`. Set those flags only after checking that your account **and selected model** have free access without paid overflow in the provider console. The application cannot inspect external account billing, and a confirmation flag does not enforce a provider's billing settings. No application can promise unlimited free API access.
+
+Local daily request caps default to Gemini 20, Groq 50, and OpenRouter 40. They reset at midnight UTC, count attempted calls, and apply to chat, quizzes, summaries, flashcards, and notes together. A provider HTTP 429 pauses that provider locally for one hour. Only other configured, eligible free providers can be tried. Exhausting all available quota produces a readable error or the existing unavailable/partial-generation result. It never selects a paid OpenRouter model. The Study tab shows configuration and local usage; provider dashboards remain authoritative for real quota and billing.
+
+Completed responses are cached in SQLite for up to 30 days using a hash of provider, model, credential, and prompt. Repeating a cached request avoids another provider call. Cache entries, conversations, notes versions, quiz answers, cards, and OCR coordinates are local data. Back up the SQLite database and `data/originals` together; both require persistent storage when hosting. This remains a single-user prototype without authentication or per-user isolation; shared public hosting requires adding those controls.
+
+Embedding fallback now uses deterministic character hashing so it stays consistent after a restart. It is lexical retrieval, with weaker cross-language matching than the sentence transformer. New documents record their embedding backend. Run `python reindex.py` after changing embedding models/backends or upgrading an older index, so existing vectors match the active backend; keyword retrieval continues to work while old incompatible vectors are skipped.
+
+For reproducible checks and browser fixture setup, see [tests/README.md](tests/README.md). No real provider requests are made by the default tests.

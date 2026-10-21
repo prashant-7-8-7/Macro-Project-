@@ -2,9 +2,14 @@ import logging
 import threading
 import time
 import uuid
+import json
+import hashlib
 from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
+
+class NotesQueueFull(RuntimeError):
+    pass
 
 
 class NotesJobManager:
@@ -16,9 +21,12 @@ class NotesJobManager:
     _instance = None
     _lock = threading.Lock()
 
-    def __init__(self):
+    def __init__(self, max_concurrent: int = 2, max_pending: int = 8):
         self._jobs: Dict[str, Dict[str, Any]] = {}
         self._jobs_lock = threading.Lock()
+        self._active_requests = {}
+        self._worker_slots = threading.BoundedSemaphore(max_concurrent)
+        self._max_pending = max_pending
 
     @classmethod
     def get_instance(cls) -> "NotesJobManager":
@@ -41,7 +49,22 @@ class NotesJobManager:
         existing_notes: Optional[Dict[str, Any]] = None,
     ) -> str:
         job_id = f"job_notes_{document_id}_{uuid.uuid4().hex[:8]}"
+        retry_fingerprint = hashlib.sha256(json.dumps(existing_notes or {}, sort_keys=True).encode()).hexdigest() if is_retry else ""
+        request_key = (document_id, detail_level, notes_language or "original", doc_lang,
+                       is_retry, tuple(sorted(set(retry_section_indices or []))), retry_fingerprint)
         with self._jobs_lock:
+            previous_id = self._active_requests.get(request_key)
+            if previous_id and self._jobs.get(previous_id, {}).get("status") in {"pending", "running"}:
+                return previous_id
+            # Keep completed jobs available for polling, while bounding retained results.
+            terminal = sorted((job for job in self._jobs.values() if job["status"] in {"completed", "failed"}),
+                              key=lambda job: job["updated_at"])
+            for old in terminal:
+                if time.time() - old["updated_at"] > 3600 or len(self._jobs) >= 100:
+                    del self._jobs[old["job_id"]]
+            if sum(job["status"] in {"pending", "running"} for job in self._jobs.values()) >= self._max_pending:
+                raise NotesQueueFull("Notes generation is busy. Wait for an existing job to finish, then retry.")
+            self._active_requests[request_key] = job_id
             self._jobs[job_id] = {
                 "job_id": job_id,
                 "document_id": document_id,
@@ -57,8 +80,9 @@ class NotesJobManager:
             }
 
         worker_thread = threading.Thread(
-            target=self._run_job_worker,
+            target=self._run_limited_worker,
             args=(
+                request_key,
                 job_id,
                 document_id,
                 doc_title,
@@ -74,8 +98,23 @@ class NotesJobManager:
             daemon=True,
             name=f"NotesWorker-{job_id}",
         )
-        worker_thread.start()
+        try:
+            worker_thread.start()
+        except Exception:
+            with self._jobs_lock:
+                self._active_requests.pop(request_key, None)
+                del self._jobs[job_id]
+            raise
         return job_id
+
+    def _run_limited_worker(self, request_key, job_id, *args):
+        try:
+            with self._worker_slots:
+                self._run_job_worker(job_id, *args)
+        finally:
+            with self._jobs_lock:
+                if self._active_requests.get(request_key) == job_id:
+                    self._active_requests.pop(request_key, None)
 
     def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
         with self._jobs_lock:
@@ -158,6 +197,9 @@ class NotesJobManager:
                     repo=repo,
                     concurrency=2,
                 )
+                if repo is not None and notes_res.get('notes'):
+                    from src.database.study import StudyRepository
+                    notes_res['version_id'] = StudyRepository().save_notes(document_id, notes_res['notes'], 'Generated study notes')
                 self.update_job(
                     job_id,
                     status="completed",

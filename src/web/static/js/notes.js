@@ -177,13 +177,13 @@ async function handleMakeNotes(sourceBtn) {
     const tabBtnQuiz = document.getElementById('tab-btn-quiz');
 
     if (tabBtnNotes && panelNotes) {
-        [tabBtnDoc, tabBtnQuiz, tabBtnNotes].forEach(b => {
+        [tabBtnDoc, tabBtnQuiz, tabBtnNotes, document.getElementById('tab-btn-study')].forEach(b => {
             if (b) {
                 b.classList.toggle('active', b === tabBtnNotes);
                 b.setAttribute('aria-selected', b === tabBtnNotes ? 'true' : 'false');
             }
         });
-        [panelDoc, panelQuiz, panelNotes].forEach(p => {
+        [panelDoc, panelQuiz, panelNotes, document.getElementById('tab-panel-study')].forEach(p => {
             if (p) p.classList.toggle('hidden', p !== panelNotes);
         });
     }
@@ -220,7 +220,7 @@ async function handleMakeNotes(sourceBtn) {
         }
 
         const data = await res.json();
-        let finalNotes = null;
+        let finalNotes = null, savedVersion = data.version_id;
 
         if (data.job_id) {
             const jobResult = await pollNotesJob(docId, data.job_id, (job) => {
@@ -230,6 +230,7 @@ async function handleMakeNotes(sourceBtn) {
                 if (progressMsg && job.message) progressMsg.textContent = job.message;
             });
             finalNotes = jobResult ? jobResult.notes : null;
+            savedVersion = jobResult?.version_id;
         } else if (data.notes) {
             finalNotes = data.notes;
         }
@@ -239,6 +240,8 @@ async function handleMakeNotes(sourceBtn) {
         }
 
         if (progressContainer) progressContainer.style.display = 'none';
+        window.dispatchEvent(new CustomEvent('notes-generated', {detail: {documentId: docId, notes: finalNotes, persisted: !!savedVersion}}));
+        if (docId !== window.activeDocumentId) return;
         renderNotes(finalNotes);
 
         if (sourceBtn && sourceBtn.id === 'btn-make-notes' && notesModal) {
@@ -257,144 +260,6 @@ async function handleMakeNotes(sourceBtn) {
     }
 }
 
-// ── Gemini Call with multi-model fallback ───────────────────
-async function callGemini(text, docTitle) {
-    const MAX_CHARS = 14000;
-    const truncated = text.length > MAX_CHARS
-        ? text.slice(0, MAX_CHARS) + '\n\n[Document truncated]'
-        : text;
-
-    const prompt = buildPrompt(truncated, docTitle);
-    let lastError = null;
-
-    for (const model of CANDIDATE_MODELS) {
-        for (let attempt = 1; attempt <= 2; attempt++) {
-            setStep(`🤖 Generating notes with AI (${model})...`);
-            const url = `https://openrouter.ai/api/v1/chat/completions`;
-
-            try {
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${GEMINI_API_KEY}`,
-                        'HTTP-Referer': window.location.href,
-                        'X-Title': 'RAG System'
-                    },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: [{ role: 'user', content: prompt }],
-                        temperature: 0.4,
-                        max_tokens: 4096
-                    })
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    const raw = data?.choices?.[0]?.message?.content || '';
-                    return parseJSON(raw);
-                }
-
-                const errData = await res.json().catch(() => ({}));
-                const errMsg = errData?.error?.message || `HTTP ${res.status}`;
-                lastError = new Error(errMsg);
-
-                // If high demand or overloaded, try next model or retry
-                if (res.status === 503 || res.status === 429) {
-                    setStep(`⏳ Server busy on ${model}, trying alternate model...`);
-                    await sleep(1000);
-                    break; // Move to next model
-                }
-            } catch (networkErr) {
-                lastError = networkErr;
-                await sleep(1000);
-            }
-        }
-    }
-
-    throw lastError || new Error('Unable to connect to Groq API. Please check your network or try again.');
-}
-
-// ── Prompt Builder ───────────────────────────────────────────
-function buildPrompt(text, docTitle) {
-    const titleHint = docTitle ? `Title suggestion: "${docTitle}"` : '';
-    return `You are an expert student note-maker. Generate structured study notes in JSON from the document below.
-${titleHint}
-
-RULES:
-1. Use ONLY information from the document.
-2. Return ONLY valid JSON — no markdown fences.
-3. Generate 5-8 sections.
-4. For "color": use one of: green, blue, red, orange, purple, teal (alternate them).
-5. For "layout": "full" (text+bullets), "split" (text+bullets LEFT, keyBox RIGHT), "comparison" (two-column compare).
-
-JSON structure:
-{
-  "title": "Topic Title",
-  "subject": "Subject Name",
-  "quote": "Key quote under 100 chars",
-  "sections": [
-    {
-      "number": 1,
-      "heading": "Section Heading",
-      "color": "green",
-      "layout": "split",
-      "content": "1-3 sentence explanation. Use **bold** for key terms.",
-      "bullets": ["Point one", "Point two"],
-      "keyBox": { "title": "⭐ Key Idea", "items": ["item 1", "item 2"] },
-      "comparison": null,
-      "tip": "Remember: important tip"
-    }
-  ],
-  "keyTakeaways": ["Takeaway 1", "Takeaway 2", "Takeaway 3"],
-  "remember": ["Fact 1", "Fact 2"]
-}
-
-For comparison layout set "comparison": {"left":{"title":"A","items":[...]},"right":{"title":"B","items":[...]}} and "bullets": null, "keyBox": null.
-
-DOCUMENT:
-${text}
-
-Return ONLY the JSON object.`;
-}
-
-
-function parseJSON(raw) {
-    let s = String(raw || '').trim();
-
-    // Remove Markdown code fences if Gemini adds them.
-    s = s
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```\s*$/i, '')
-        .trim();
-
-    // Extract the outer JSON object.
-    const start = s.indexOf('{');
-    const end = s.lastIndexOf('}');
-
-    if (start === -1 || end === -1 || end <= start) {
-        throw new Error('AI did not return a JSON object. Please try again.');
-    }
-
-    s = s.slice(start, end + 1);
-
-    try {
-        const data = JSON.parse(s);
-
-        if (!data.title || !Array.isArray(data.sections) || !data.sections.length) {
-            throw new Error('AI returned incomplete notes. Try again.');
-        }
-
-        return data;
-    } catch (error) {
-        console.error('Invalid Gemini JSON:', s);
-        console.error('JSON parsing error:', error);
-
-        throw new Error(
-            'Gemini returned malformed JSON. Please generate the notes again.'
-        );
-    }
-}
 // ── Notes Renderer ───────────────────────────────────────────
 function renderNotes(data) {
     if (!data) return;
@@ -638,7 +503,8 @@ async function handleRetryFailedSections(docId, existingNotes) {
         }
 
         if (updatedNotes) {
-            renderNotes(updatedNotes);
+            window.dispatchEvent(new CustomEvent('notes-generated', {detail: {documentId: docId, notes: updatedNotes}}));
+            if (docId === window.activeDocumentId) renderNotes(updatedNotes);
         }
         if (progressContainer) progressContainer.style.display = 'none';
     } catch (err) {

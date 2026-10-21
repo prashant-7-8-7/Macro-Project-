@@ -2,10 +2,11 @@
 let activeDocumentId = null;
 window.activeDocumentId = null;
 
-// API Base URL (defaults to Render API if hosted externally like Vercel)
-const API_BASE_URL = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1') || window.location.hostname.includes('onrender.com')
-    ? ''
-    : 'https://macro-project-a63n.onrender.com';
+// Retain the current local/Render/Vercel deployment behavior; allow an explicit override.
+const API_BASE_URL = (window.WORKSPACE_API_URL ?? (
+    window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1') || window.location.hostname.includes('onrender.com')
+        ? '' : 'https://macro-project-a63n.onrender.com'
+)).replace(/\/$/, '');
 
 // DOM Elements
 const uploadZone = document.getElementById('upload-zone');
@@ -115,15 +116,18 @@ function setupWorkspaceTabs() {
     const panelDoc = document.getElementById('tab-panel-document');
     const panelQuiz = document.getElementById('tab-panel-quiz');
     const panelNotes = document.getElementById('tab-panel-notes');
+    const tabBtnStudy = document.getElementById('tab-btn-study');
+    const panelStudy = document.getElementById('tab-panel-study');
+    tabBtnStudy?.addEventListener('click', () => switchWorkspaceTab(tabBtnStudy, panelStudy));
 
     function switchWorkspaceTab(activeBtn, activePanel) {
-        [tabBtnDoc, tabBtnQuiz, tabBtnNotes].forEach(b => {
+        [tabBtnDoc, tabBtnQuiz, tabBtnNotes, tabBtnStudy].forEach(b => {
             if (b) {
                 b.classList.toggle('active', b === activeBtn);
                 b.setAttribute('aria-selected', b === activeBtn ? 'true' : 'false');
             }
         });
-        [panelDoc, panelQuiz, panelNotes].forEach(p => {
+        [panelDoc, panelQuiz, panelNotes, panelStudy].forEach(p => {
             if (p) {
                 p.classList.toggle('hidden', p !== activePanel);
             }
@@ -489,10 +493,27 @@ document.addEventListener('DOMContentLoaded', () => {
     setupGlobalShortcuts();
 });
 
+function updateAiStatus(available) {
+    const indicator = document.getElementById('ai-status');
+    if (!indicator) return;
+    indicator.classList.toggle('online', available === true);
+    indicator.title = available === true ? 'Last AI request succeeded' : 'AI unavailable or not checked';
+    indicator.setAttribute('aria-label', indicator.title);
+}
+
 // --- API Calls ---
+async function readApiResponse(res) {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const detail = typeof data.detail === 'string' ? data.detail : `Request failed (${res.status})`;
+        throw new Error(detail);
+    }
+    return data;
+}
+
 async function fetchDocuments() {
     const res = await fetch(`${API_BASE_URL}/api/documents`);
-    const data = await res.json();
+    const data = await readApiResponse(res);
     return data.documents;
 }
 
@@ -503,27 +524,29 @@ async function fetchDocumentContent(docId) {
 }
 
 async function deleteDocument(docId) {
-    await fetch(`${API_BASE_URL}/api/documents/${docId}`, { method: 'DELETE' });
-    if (activeDocumentId === docId) {
-        closeDocument();
+    try {
+        await readApiResponse(await fetch(`${API_BASE_URL}/api/documents/${docId}`, { method: 'DELETE' }));
+        if (activeDocumentId === docId) closeDocument();
+        await loadDocuments();
+    } catch (err) {
+        window.showToast(err.message, 'error');
     }
-    loadDocuments();
 }
 
 async function askQuestion(query, docId) {
     const res = await fetch(`${API_BASE_URL}/api/qa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query, mode: "hybrid", top_k: 40, document_id: docId })
+        body: JSON.stringify({ query: query, mode: "hybrid", top_k: 6, document_id: docId })
     });
-    return await res.json();
+    return await readApiResponse(res);
 }
 
 async function summarizeDocument(docId) {
     const res = await fetch(`${API_BASE_URL}/api/documents/${docId}/summarize`, {
         method: 'POST'
     });
-    return await res.json();
+    return await readApiResponse(res);
 }
 
 // Global Document Cache for Real-Time Search
@@ -565,6 +588,7 @@ async function loadDocuments() {
         const docs = await fetchDocuments();
         window.allDocuments = docs || [];
         renderDocumentsList(window.allDocuments);
+        window.dispatchEvent(new CustomEvent('library-loaded'));
     } catch (err) {
         console.error("Error loading documents:", err);
         if (documentsList) {
@@ -575,8 +599,8 @@ async function loadDocuments() {
 
 function renderDocumentsList(docs) {
     if (!documentsList) return;
+    if (window.studyFilterDocuments) docs = window.studyFilterDocuments(docs);
     documentsList.innerHTML = '';
-    
     // Update count badge
     const countBadge = document.getElementById('documents-count');
     if (countBadge) {
@@ -771,6 +795,7 @@ function setupDocumentViewer() {
 }
 
 async function openDocument(docId, filename, sizeKB) {
+    window.studyStopChat?.();
     activeDocumentId = docId;
     window.activeDocumentId = docId;
     window.activeDocumentFilename = filename;
@@ -821,7 +846,7 @@ async function openDocument(docId, filename, sizeKB) {
     chatContainer.innerHTML = `
         <div class="chat-message ai-message">
             <div class="avatar"><i class="fa-solid fa-robot"></i></div>
-            <div class="message-content" dir="auto">Hello! I'm ready to answer any questions about <strong>${filename}</strong>.</div>
+            <div class="message-content" dir="auto">Hello! I'm ready to answer any questions about <strong>${escapeHTML(filename)}</strong>.</div>
         </div>
     `;
     
@@ -845,12 +870,14 @@ async function openDocument(docId, filename, sizeKB) {
         }
 
         renderDocumentContent(data.chunks, '', data.warning);
+        window.dispatchEvent(new CustomEvent('document-opened', {detail: {documentId: docId}}));
     } catch (err) {
         viewerContent.innerHTML = `<p style="color: #ef4444;">Error loading document content.</p>`;
     }
 }
 
 function closeDocument() {
+    window.studyStopChat?.();
     activeDocumentId = null;
     window.activeDocumentId = null;
     window.activeDocumentFilename = null;
@@ -1102,11 +1129,12 @@ function setupChat() {
             hideTypingIndicator();
             
             // Render markdown answer
-            const rawHtml = marked.parse(res.answer);
+            updateAiStatus(res.ai_available);
+        const rawHtml = marked.parse(res.answer);
             appendMessage('ai', rawHtml);
         } catch (err) {
             hideTypingIndicator();
-            appendMessage('ai', `<span style="color: #ef4444;">Failed to generate summary. Make sure GEMINI_API_KEY is set.</span>`);
+            appendMessage('ai', 'Could not generate a summary. Check the AI status and server logs.');
         } finally {
             btnSummarize.classList.remove('is-loading');
             btnSummarize.innerHTML = '<i class="fa-solid fa-bolt"></i> Summarize';
@@ -1116,13 +1144,14 @@ function setupChat() {
     const btnClearChat = document.getElementById('btn-clear-chat');
     if (btnClearChat) {
         btnClearChat.addEventListener('click', () => {
+            if (window.studyDeleteConversation) return window.studyDeleteConversation();
             if (confirm('Clear all chat messages for this document?')) {
                 const filename = window.activeDocumentFilename || 'this document';
                 chatContainer.innerHTML = `
                     <div class="chat-message ai-message">
                         <div class="avatar"><i class="fa-solid fa-robot"></i></div>
                         <div class="message-content" dir="auto">
-                            Hello! I'm ready to answer any questions about <strong>${filename}</strong>.
+                            Hello! I'm ready to answer any questions about <strong>${escapeHTML(filename)}</strong>.
                         </div>
                     </div>
                 `;
@@ -1132,6 +1161,7 @@ function setupChat() {
 }
 
 async function handleSendChat() {
+    if (window.studySendChat) return window.studySendChat();
     const text = chatInput.value.trim();
     if (!text || !activeDocumentId) return;
     
@@ -1147,6 +1177,7 @@ async function handleSendChat() {
         const res = await askQuestion(text, activeDocumentId);
         hideTypingIndicator();
         
+        updateAiStatus(res.ai_available);
         const rawHtml = marked.parse(res.answer);
         appendMessage('ai', rawHtml);
         
@@ -1264,10 +1295,16 @@ function appendMessage(sender, contentHTML, id = null) {
     if (id) div.id = id;
     
     const icon = sender === 'user' ? 'fa-user' : 'fa-robot';
+    const safeContent = sender === 'user' ? escapeHTML(contentHTML) :
+        (window.DOMPurify ? DOMPurify.sanitize(contentHTML, {
+            USE_PROFILES: { html: true },
+            FORBID_TAGS: ['img', 'style', 'form', 'input', 'video', 'audio'],
+            FORBID_ATTR: ['style'],
+        }) : escapeHTML(contentHTML));
     
     div.innerHTML = `
         <div class="avatar"><i class="fa-solid ${icon}"></i></div>
-        <div class="message-content" dir="auto">${contentHTML}</div>
+        <div class="message-content" dir="auto">${safeContent}</div>
     `;
     
     if (sender === 'ai' && !id) {
@@ -1287,7 +1324,26 @@ function renderCitations(citations) {
     
     citations.forEach(cit => {
         const li = document.createElement('li');
-        li.textContent = `[${cit.id}] Page ${cit.page_number} (Relevance: ${(cit.score).toFixed(2)})`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'citation-source-btn';
+        button.textContent = `[${cit.id}] ${cit.filename || 'Source'} · Page ${cit.page_number}`;
+        button.addEventListener('click', () => {
+            if (window.studyPreviewCitation) return window.studyPreviewCitation(cit);
+            document.getElementById('tab-btn-document')?.click();
+            const searchInput = document.getElementById('doc-search-input');
+            if (searchInput) { searchInput.value = ''; searchInput.dispatchEvent(new Event('input')); }
+            renderDocumentContent(window.currentDocChunks, '', window.currentDocWarning);
+            const chunk = [...viewerContent.querySelectorAll('.viewer-chunk')].find(el =>
+                cit.chunk_index != null ? el.dataset.chunkIndex === String(cit.chunk_index) :
+                    el.dataset.pageNumber === String(cit.page_number));
+            if (chunk) {
+                chunk.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+                chunk.tabIndex = -1;
+                chunk.focus({ preventScroll: true });
+            }
+        });
+        li.appendChild(button);
         ul.appendChild(li);
     });
     
@@ -1376,6 +1432,7 @@ async function handleFileUpload(file) {
         if (!res.ok) {
             throw new Error(uploadData.detail || "Upload failed");
         }
+        if (uploadData.status === 'failed') throw new Error('No readable text could be extracted.');
         
         updateProgress(100, '✓ Ingestion complete!');
         if (uploadData.warning) {
@@ -1383,6 +1440,11 @@ async function handleFileUpload(file) {
         }
         await new Promise(r => setTimeout(r, 400));
         await loadDocuments();
+        if (uploadData.document_id) {
+            const uploaded = window.allDocuments.find(doc => doc.id === uploadData.document_id);
+            if (uploaded) await openDocument(uploaded.id, uploaded.filename, Math.round(uploaded.file_size / 1024));
+            if (uploadData.reason === 'duplicate') window.showToast('This document is already in your library.', 'info');
+        }
         
     } catch (err) {
         clearInterval(progressInterval);
@@ -1468,7 +1530,8 @@ async function generateQuiz() {
             body: JSON.stringify({
                 document_id: activeDocumentId,
                 num_questions: numQuestions,
-                difficulty: difficulty
+                difficulty: difficulty,
+                focus_weak_topics: Boolean(document.getElementById('quiz-focus-weak')?.checked)
             })
         });
 
@@ -1491,6 +1554,8 @@ async function generateQuiz() {
             "success"
         );
 
+        window.currentQuizId = data.quiz_id || null;
+        window.studyAttemptSaved = false;
         window.currentQuizQuestions = data.questions;
         window.quizUserAnswers = {};
         window.currentQuizIndex = 0;
@@ -1514,7 +1579,7 @@ async function generateQuiz() {
 
 function showQuizStatus(message, type) {
     quizStatus.className = `quiz-status ${type}`;
-    quizStatus.innerHTML = message;
+    quizStatus.textContent = message;
     quizStatus.classList.remove('hidden');
 }
 
@@ -1584,12 +1649,12 @@ function renderQuiz(questions) {
             `;
         }).join('');
 
-        const explanationText = question.explanation || question.rationale || 'Source grounding verified from document context.';
+        const explanationText = question.explanation || question.rationale || 'The answer text was found in the cited source.';
 
         card.innerHTML = `
             <div class="quiz-question-header">
                 <span class="question-number-pill">QUESTION ${index + 1} OF ${questions.length}</span>
-                <span class="verified-badge"><i class="fa-solid fa-circle-check"></i> Verified Grounding</span>
+                <span class="verified-badge"><i class="fa-solid fa-circle-check"></i> Source checked</span>
             </div>
             <h4 class="quiz-question" dir="auto">${escapeHTML(question.question)}</h4>
             <div class="quiz-options">
@@ -1598,7 +1663,7 @@ function renderQuiz(questions) {
             <div class="quiz-metadata" style="display:flex;gap:var(--space-3);font-size:11px;color:var(--text-tertiary);margin-top:var(--space-1);flex-wrap:wrap;">
                 <span><i class="fa-solid fa-layer-group"></i> ${escapeHTML(question.topic || 'General')}</span>
                 <span><i class="fa-solid fa-signal"></i> ${escapeHTML(question.difficulty || 'Mixed')}</span>
-                <span><i class="fa-solid fa-link"></i> Page ${question.source_page || 1} • Chunk ${escapeHTML(String(question.source_chunk_id || 'N/A'))}</span>
+                <span><i class="fa-solid fa-link"></i> Page ${question.source_page || 1} • Chunk ${escapeHTML(String(question.source_chunk_id ?? 'N/A'))}</span>
             </div>
             <div class="quiz-explanation-accordion">
                 <button type="button" class="btn-toggle-explanation" onclick="toggleExplanation(${index})">
@@ -1607,6 +1672,7 @@ function renderQuiz(questions) {
                 <div class="quiz-explanation-body hidden" id="explanation-${index}" dir="auto">
                     <strong><i class="fa-solid fa-lightbulb"></i> Answer Analysis:</strong>
                     <p style="margin:4px 0 0;" dir="auto">${escapeHTML(explanationText)}</p>
+                    ${question.source_quote ? `<blockquote class="quiz-source-quote" dir="auto">${escapeHTML(question.source_quote)}</blockquote>` : ''}
                     <p style="margin:6px 0 0;font-weight:600;color:var(--brand-indigo);" dir="auto">Correct: ${escapeHTML(question.correct_answer)}</p>
                 </div>
             </div>
@@ -1642,11 +1708,7 @@ function handleOptionSelect(qIdx, selectedValue, clickedCard) {
     const correctAns = (question.correct_answer || '').trim().toLowerCase();
     const chosen = selectedValue.trim().toLowerCase();
 
-    // Flexible match
-    const isCorrect = (chosen === correctAns) ||
-                      correctAns.startsWith(chosen.substring(0, 2)) ||
-                      chosen.includes(correctAns) ||
-                      correctAns.includes(chosen);
+    const isCorrect = chosen === correctAns;
 
     if (isCorrect) {
         clickedCard.classList.add('correct');
@@ -1655,7 +1717,7 @@ function handleOptionSelect(qIdx, selectedValue, clickedCard) {
         clickedCard.classList.add('wrong');
         options.forEach(o => {
             const oVal = (o.dataset.optionValue || '').trim().toLowerCase();
-            if (oVal === correctAns || correctAns.includes(oVal) || oVal.includes(correctAns)) {
+            if (oVal === correctAns) {
                 o.classList.add('correct');
             }
         });
@@ -1705,6 +1767,7 @@ function updateQuizProgress() {
     }
 
     if (answeredCount === total) {
+        window.studySaveAttempt?.();
         renderQuizResultsSummary(correctCount, total);
     }
 }
@@ -1813,7 +1876,11 @@ function renderQuizResultsSummary(correctCount, total) {
     // Button event listeners
     const retryBtn = summaryCard.querySelector('#btn-quiz-retry');
     if (retryBtn) {
-        retryBtn.addEventListener('click', () => {
+        retryBtn.addEventListener('click', async () => {
+            retryBtn.disabled = true;
+            const ready = !window.studyBeginRetake || await window.studyBeginRetake();
+            retryBtn.disabled = false;
+            if (!ready) return;
             window.quizUserAnswers = {};
             renderQuiz(window.currentQuizQuestions);
         });
@@ -1907,9 +1974,9 @@ function triggerConfettiBurst() {
 
 // Prevent HTML injection when displaying generated content
 function escapeHTML(value) {
-    const div = document.createElement('div');
-    div.textContent = value ?? '';
-    return div.innerHTML;
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
 }
 
 // Lightweight debounce utility for high-frequency input and search handlers

@@ -137,18 +137,37 @@ class DocumentParser:
 
     @staticmethod
     def _parse_pdf(path: Path) -> Tuple[List[Dict], Optional[str]]:
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(str(path))
-            pages = []
-            for i, page in enumerate(reader.pages):
-                raw_text = page.extract_text() or ""
-                normalized_text = normalize_document_text(raw_text).strip()
-                if normalized_text:
-                    pages.append({"text": normalized_text, "page_number": i + 1})
-            return DocumentParser._check_pdf_quality(pages)
-        except Exception as e:
-            raise RuntimeError(f"Error parsing PDF: {e}")
+        import os
+        import fitz
+        from src.ingestion.ocr import ocr_page
+        pages, warnings, ocr_count = [], set(), 0
+        with fitz.open(path) as document:
+            if document.needs_pass:
+                raise ValueError("Password-protected PDFs are not supported")
+            for number, page in enumerate(document, 1):
+                text = normalize_document_text(page.get_text()).strip()
+                words = []
+                _, warning = DocumentParser._check_pdf_quality([{'text': text}])
+                if len(text) < 40 or warning:
+                    if ocr_count < int(os.environ.get('OCR_MAX_PAGES', '10')):
+                        ocr_count += 1
+                        try:
+                            extracted, words, ocr_warning = ocr_page(page)
+                            if extracted.strip():
+                                text = normalize_document_text(extracted).strip()
+                            if ocr_warning:
+                                warnings.add(ocr_warning)
+                        except Exception:
+                            warnings.add(f'OCR could not read page {number}. Check local OCR languages and image quality.')
+                    else:
+                        warnings.add('OCR page limit reached; increase OCR_MAX_PAGES for larger scans.')
+                if text:
+                    pages.append({'text': text, 'page_number': number, 'ocr_words': words})
+                else:
+                    warnings.add(f'No readable text on page {number}.')
+        if not pages:
+            warnings.add('This PDF looks scanned or uses a non-standard font, so text could not be read reliably')
+        return pages, ' '.join(sorted(warnings)) or None
 
     @staticmethod
     def _parse_text(path: Path) -> Tuple[List[Dict], Optional[str]]:

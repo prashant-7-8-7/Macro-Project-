@@ -85,3 +85,56 @@ CREATE TABLE IF NOT EXISTS notes_section_cache (
 
 CREATE INDEX IF NOT EXISTS idx_notes_cache_doc ON notes_section_cache (document_id);
 
+-- Persistent study workflow. Existing document/chunk tables stay compatible.
+CREATE TABLE IF NOT EXISTS collections (
+ id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS collection_documents (
+ collection_id TEXT REFERENCES collections(id) ON DELETE CASCADE,
+ document_id TEXT REFERENCES documents(id) ON DELETE CASCADE,
+ PRIMARY KEY(collection_id, document_id)
+);
+CREATE TABLE IF NOT EXISTS chat_sessions (
+ id TEXT PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+ scope_json TEXT NOT NULL, title TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+ updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+ id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+ role TEXT NOT NULL CHECK(role IN ('user','assistant')), content TEXT NOT NULL,
+ citations_json TEXT NOT NULL DEFAULT '[]', created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at);
+CREATE TABLE IF NOT EXISTS study_quizzes (
+ id TEXT PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+ questions_json TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+ id TEXT PRIMARY KEY, quiz_id TEXT NOT NULL REFERENCES study_quizzes(id) ON DELETE CASCADE,
+ answers_json TEXT NOT NULL, correct INTEGER NOT NULL, total INTEGER NOT NULL,
+ created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(quiz_id)
+);
+CREATE TABLE IF NOT EXISTS flashcards (
+ id TEXT PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+ question TEXT NOT NULL, answer TEXT NOT NULL, source_page INTEGER, source_chunk_id TEXT,
+ source_quote TEXT, interval_days INTEGER NOT NULL DEFAULT 0, repetitions INTEGER NOT NULL DEFAULT 0,
+ due_at TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE(document_id, question, answer)
+);
+CREATE INDEX IF NOT EXISTS idx_flashcards_due ON flashcards(due_at);
+CREATE TABLE IF NOT EXISTS notes_versions (
+ id TEXT PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+ label TEXT NOT NULL, notes_json TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS document_ocr (
+ document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+ page_number INTEGER NOT NULL, words_json TEXT NOT NULL,
+ PRIMARY KEY(document_id, page_number)
+);
+CREATE TABLE IF NOT EXISTS ai_response_cache (
+ cache_key TEXT PRIMARY KEY, response TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ai_daily_usage (
+ provider TEXT NOT NULL, day TEXT NOT NULL, requests INTEGER NOT NULL DEFAULT 0,
+ blocked_until INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(provider, day)
+);
