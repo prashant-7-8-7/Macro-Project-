@@ -214,7 +214,7 @@
     }
     async function usage() {
         const data = await api('/ai/usage');
-        $('ai-usage').innerHTML = data.providers.map(provider => `<p><strong>${esc(provider.provider)}</strong> · ${!provider.configured ? 'No key configured' : !provider.confirmed_free ? 'Free-tier confirmation needed in setup' : `${provider.requests}/${provider.daily_limit} local daily requests`}${provider.blocked_until * 1000 > Date.now() ? ' · Waiting for quota reset' : ''}</p>`).join('');
+        $('ai-usage').innerHTML = data.providers.map(provider => `<p><strong>${esc(provider.provider)}</strong> · ${esc(provider.model)} · ${!provider.configured ? 'No key configured' : !provider.confirmed_free ? 'Free-tier confirmation needed in setup' : `${provider.requests}/${provider.daily_limit} local daily requests`}${provider.blocked_until * 1000 > Date.now() ? ' · Waiting for quota reset' : ''}</p>`).join('');
     }
     async function versions() {
         if (!docId()) return;

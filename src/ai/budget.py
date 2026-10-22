@@ -3,22 +3,58 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 import urllib.error
 import urllib.request
 from contextlib import closing
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from src.database.db import get_connection
 
 logger = logging.getLogger(__name__)
+_last_issue = ContextVar('ai_last_issue', default=None)
+
+
+def clear_issue():
+    _last_issue.set(None)
+
+
+def record_issue(provider, reason):
+    _last_issue.set((provider, reason))
+    logger.warning('%s generation unavailable (%s)', provider, reason)
+
+
+def last_issue_message():
+    issue = _last_issue.get()
+    return f'{issue[0]}: {stream_failure(issue[1])}' if issue else None
+
+
+def free_openrouter_model(model):
+    # The catalog's :free variant is required, never a paid fallback array.
+    model = (model or '').strip()
+    return model if model == 'openrouter/free' or re.fullmatch(r'[\w.-]+/[\w.-]+:free', model) else 'openrouter/free'
+
+
+def http_reason(code):
+    return {401: 'auth', 402: 'credits', 403: 'access', 404: 'model', 429: 'quota'}.get(code, 'provider_error')
+
+
+def pause_after_limit(provider, headers=None):
+    try:
+        seconds = max(1, min(86400, int((headers or {}).get('Retry-After', '60'))))
+    except (ValueError, TypeError):
+        seconds = 60
+    block(provider, seconds)
 
 
 def providers():
     result = []
-    for name, default in [('gemini', 'gemini-3.8-flash'), ('groq', 'llama-3.1-8b-instant'), ('openrouter', 'openrouter/free')]:
-        key = os.environ.get(name.upper() + '_API_KEY', '')
-        model = default if name == 'openrouter' else os.environ.get(name.upper() + '_MODEL', default)
-        # OpenRouter's free router only falls back to other free models.
+    for name, default in [('gemini', 'gemini-3.8-flash'), ('groq', 'qwen/qwen3.8-27b'), ('openrouter', 'openrouter/free')]:
+        key = os.environ.get(name.upper() + '_API_KEY', '').strip()
+        model = os.environ.get(name.upper() + '_MODEL', default)
+        if name == 'openrouter':
+            model = free_openrouter_model(model)
         confirmed = name == 'openrouter' or os.environ.get(name.upper() + '_FREE_TIER_CONFIRMED', '').lower() == 'true'
         result.append({'provider': name, 'model': model, 'configured': bool(key), 'confirmed_free': confirmed})
     return result
@@ -59,7 +95,7 @@ def status():
 
 
 def cache_key(provider, model, prompt):
-    credential = os.environ.get(provider.upper() + '_API_KEY', '')
+    credential = os.environ.get(provider.upper() + '_API_KEY', '').strip()
     return hashlib.sha256((provider + model + credential + prompt).encode()).hexdigest()
 
 
@@ -79,7 +115,9 @@ def save_cache(key, text):
 
 
 def request_for(provider, model, prompt, stream=False):
-    key = os.environ.get(provider.upper() + '_API_KEY', '')
+    if provider == 'openrouter':
+        model = free_openrouter_model(model)
+    key = os.environ.get(provider.upper() + '_API_KEY', '').strip()
     headers = {'Content-Type': 'application/json'}
     max_tokens = max(256, min(16384, int(os.environ.get('AI_MAX_OUTPUT_TOKENS', '4096'))))
     if provider == 'gemini':
@@ -92,6 +130,8 @@ def request_for(provider, model, prompt, stream=False):
         headers['Authorization'] = 'Bearer ' + key
         payload = {'model': model, 'messages': [{'role': 'user', 'content': prompt}],
                    'temperature': 0.3, 'max_tokens': max_tokens, 'stream': stream}
+        if provider == 'groq' and model in ('qwen/qwen3.8-27b', 'qwen/qwen3.6-27b'):
+            payload['reasoning_effort'] = 'none'
     return urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers, method='POST')
 
 
@@ -106,31 +146,70 @@ def single_request(provider, prompt):
     model = next(p['model'] for p in providers() if p['provider'] == provider)
     try:
         with urllib.request.urlopen(request_for(provider, model, prompt), timeout=60) as response:
-            return read_text(provider, json.load(response)).strip() or None
+            data = json.load(response)
+            if data.get('error'):
+                error = data['error']
+                code = error.get('code') if isinstance(error, dict) else None
+                reason = http_reason(int(code)) if str(code).isdigit() else 'provider_error'
+                if reason == 'quota':
+                    pause_after_limit(provider, getattr(response, 'headers', None))
+                record_issue(provider, reason)
+                return None
+            choices = data.get('candidates', []) if provider == 'gemini' else data.get('choices', [])
+            finish = next((c.get('finish_reason') or c.get('finishReason') for c in choices
+                           if c.get('finish_reason') or c.get('finishReason')), None)
+            if finish not in (None, 'stop', 'STOP'):
+                record_issue(provider, 'length' if finish in ('length', 'MAX_TOKENS') else 'provider_error')
+                return None
+            text = read_text(provider, data).strip()
+            if not text:
+                record_issue(provider, 'incomplete')
+            return text or None
     except urllib.error.HTTPError as exc:
         if exc.code == 429:
-            block(provider)
+            pause_after_limit(provider, exc.headers)
+        record_issue(provider, http_reason(exc.code))
         logger.warning('%s request failed with HTTP %s', provider, exc.code)
     except Exception as exc:
+        record_issue(provider, 'timeout' if isinstance(exc, TimeoutError) else 'provider_error')
         logger.warning('%s request unavailable (%s)', provider, type(exc).__name__)
     return None
 
 
-def generate(prompt, callers):
+def generate(prompt, callers, validator=None):
+    clear_issue()
+    eligible = False
+    def accepted(text):
+        try:
+            return validator is None or bool(validator(text))
+        except (ValueError, TypeError, KeyError):
+            return False
     for entry in providers():
         name, model = entry['provider'], entry['model']
         if not entry['configured'] or not entry['confirmed_free']:
             continue
+        eligible = True
         key = cache_key(name, model, prompt)
         hit = cached(key)
-        if hit:
+        if hit and accepted(hit):
+            clear_issue()
             return hit
+        if hit:
+            with closing(get_connection()) as db, db:
+                db.execute('DELETE FROM ai_response_cache WHERE cache_key=?', (key,))
         if not reserve(name):
+            record_issue(name, 'quota')
             continue
         answer = callers[name](prompt)
         if answer:
+            if not accepted(answer):
+                record_issue(name, 'format')
+                continue
             save_cache(key, answer)
+            clear_issue()
             return answer
+    if not eligible:
+        record_issue('setup', 'configuration')
     return None
 
 
@@ -140,8 +219,13 @@ def stream_failure(reason, partial=False):
         'content_filter': 'The provider stopped this response through its content filter. Try rephrasing your question.',
         'timeout': 'The AI provider timed out. Please try again.',
         'connection': 'The connection to the AI provider was interrupted. Please try again.',
-        'quota': 'The provider reported a rate or quota limit. Check AI usage and try again after the pause.',
+        'quota': 'A local or provider rate or quota limit was reached. Check AI usage and try again after the reset.',
         'auth': 'The provider rejected the API key. Check its key in your local .env and restart the server.',
+        'access': 'The provider denied access. Check model permissions, account restrictions, or budget limits.',
+        'credits': 'The provider blocked this account through a credit or budget restriction. Use an eligible free account or another configured free provider.',
+        'model': 'The selected model is unavailable. Choose an available free model in setup.',
+        'format': 'The model returned an invalid quiz response. Try another free model or request fewer questions.',
+        'configuration': 'No eligible AI provider is configured. Check the API key and free-tier confirmation in setup.',
         'provider_error': 'The AI provider returned an error. Please try again later.',
         'incomplete': 'The AI provider ended the stream before completing its answer. Please try again.',
     }
@@ -181,9 +265,9 @@ def stream(prompt):
                     if event.get('error'):
                         error = event['error']
                         code = str(error.get('code', '')) if isinstance(error, dict) else ''
-                        reason = 'quota' if code == '429' else 'auth' if code in ('401', '403') else 'provider_error'
+                        reason = http_reason(int(code)) if code.isdigit() else 'provider_error'
                         if reason == 'quota':
-                            block(name)
+                            pause_after_limit(name, getattr(response, 'headers', None))
                         failed = True
                         break
                     choices = event.get('choices', []) if name != 'gemini' else event.get('candidates', [])
@@ -205,10 +289,10 @@ def stream(prompt):
                     logger.info('%s stream completed', name)
                     return
         except urllib.error.HTTPError as exc:
-            reason = 'quota' if exc.code == 429 else 'auth' if exc.code in (401, 403) else 'provider_error'
+            reason = http_reason(exc.code)
             logger.warning('%s stream HTTP failure (%s)', name, exc.code)
             if exc.code == 429:
-                block(name)
+                pause_after_limit(name, exc.headers)
         except TimeoutError:
             reason = 'timeout'
         except OSError:

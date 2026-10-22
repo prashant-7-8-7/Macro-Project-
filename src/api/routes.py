@@ -20,6 +20,7 @@ from src.config import UPLOAD_DIR, MAX_UPLOAD_BYTES, ALLOWED_EXTENSIONS
 from src.ingestion.pipeline import IngestionPipeline
 from src.retrieval.engine import HybridSearchEngine
 from src.ai.rag import synthesize_answer, summarize_document, generate_notes, retry_notes
+from src.ai import budget
 from src.ai.notes_jobs import NotesQueueFull
 from src.database.repository import DocumentRepository
 
@@ -465,6 +466,7 @@ def generate_quiz(
     request: QuizGenerateRequest,
     repo: DocumentRepository = Depends(get_repo),
 ):
+    budget.clear_issue()
     try:
         # Get chunks belonging ONLY to this document
         contexts = repo.get_document_chunks_content(
@@ -498,6 +500,8 @@ def generate_quiz(
             num_questions=request.num_questions,
             difficulty=request.difficulty,
         )
+        if not questions and budget.last_issue_message():
+            raise HTTPException(status_code=503, detail=budget.last_issue_message())
 
         # Independently validate generated questions
         verified, rejected = validate_questions(
@@ -510,7 +514,7 @@ def generate_quiz(
 
         # Retry loop: if verified count is below requested, make up to 3 retry attempts for only missing number
         retry_attempts = 0
-        while len(verified) < request.num_questions and retry_attempts < 3:
+        while len(verified) < request.num_questions and retry_attempts < 3 and not budget.last_issue_message():
             retry_attempts += 1
             missing_count = request.num_questions - len(verified)
             logger.info(
@@ -565,7 +569,9 @@ def generate_quiz(
         # Transparent message if document content was too small to reach requested count
         message = None
         if len(verified) < request.num_questions:
-            message = f"Only {len(verified)} verified questions could be generated from this document (requested {request.num_questions})."
+            message = f"Generated {len(verified)} verified questions of {request.num_questions} requested."
+            if budget.last_issue_message():
+                message += ' ' + budget.last_issue_message()
         else:
             message = f"{len(verified)} verified questions generated successfully."
 
