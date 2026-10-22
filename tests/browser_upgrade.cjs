@@ -57,6 +57,28 @@ const base = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8000';
         await page.locator('.citation-source-btn').click();
         assert.equal(await page.evaluate(() => document.activeElement.dataset.chunkIndex), '4');
         assert.equal(await page.locator('#ai-status').evaluate(el => el.classList.contains('online')), true);
+        let requestedMode;
+        await page.route('**/api/chat/stream', route => {
+            requestedMode = route.request().postDataJSON().mode;
+            return route.fulfill({ contentType: 'text/event-stream', body: [
+                {type:'session',session_id:'test-session'},
+                {type:'delta',text:'## Partial answer\n\n**Framing**\n\n| Layer | Role |\n| --- | --- |\n| Link | Frames |\n\n<img src=x onerror="window.__xss=1">'},
+                {type:'error',message:'The model reached its output limit. This partial answer was not saved. <img src=x onerror="window.__xss=1">'}
+            ].map(event=>'data: '+JSON.stringify(event)+'\n\n').join('') });
+        });
+        await page.locator('#chat-search-mode').selectOption('keyword');
+        await page.locator('#chat-input').fill('Explain frames.');
+        await page.locator('#btn-send').click();
+        const partial = page.locator('.ai-message').last();
+        await partial.locator('[role="status"]').waitFor();
+        assert.equal(requestedMode, 'keyword');
+        assert.equal(await partial.locator('h2').innerText(), 'Partial answer');
+        assert.equal(await partial.locator('strong').innerText(), 'Framing');
+        assert.equal(await partial.locator('table tbody tr').count(), 1);
+        assert.equal(await partial.locator('img').count(), 0);
+        assert.match(await partial.locator('[role="status"]').innerText(), /output limit/);
+        assert.equal(await page.evaluate(() => window.__xss), undefined);
+        assert.equal(await page.locator('#ai-status').evaluate(el => el.classList.contains('online')), false);
         await page.locator('#tab-btn-quiz').click();
         await page.locator('#btn-generate-quiz').click();
         await page.locator('.btn-toggle-explanation').click();

@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import time
 from typing import List
 import numpy as np
 from src.config import EMBEDDING_MODEL_NAME
@@ -22,6 +23,8 @@ class EmbeddingEngine:
         return cls._instance
 
     def _initialize(self):
+        started = time.monotonic()
+        logger.info('Initializing embedding backend; the first load may take longer.')
         self.transformer_model = None
         self.fallback_model = None
         self.model_name = EMBEDDING_MODEL_NAME
@@ -35,6 +38,7 @@ class EmbeddingEngine:
         except Exception as exc:
             logger.warning('Transformer unavailable (%s); using deterministic lexical vectors. Reindex legacy vectors before using this backend.', type(exc).__name__)
             self._setup_fallback()
+        logger.info('Embedding backend ready in %.2fs (%s)', time.monotonic() - started, self.profile)
 
     @property
     def profile(self):
