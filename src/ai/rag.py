@@ -130,8 +130,8 @@ def prepare_answer(query: str, contexts: List[dict], history=None, answer_style=
         })
 
     styles = {
-        'general': 'Give a clear, well-structured answer.',
-        'simple': 'Explain in simple language with one example, readable in two minutes.',
+        'general': 'Give a clear, well-structured answer, normally within 350 words unless the question explicitly asks for more detail.',
+        'simple': 'Explain in simple language with one example, readable in two minutes. Stay within 250 words.',
         '2_marks': 'Write a concise 2-mark exam answer with a definition and two key points.',
         '6_marks': 'Write a 6-mark exam answer with an introduction, numbered explanation, example, and conclusion.',
         '10_marks': 'Write a detailed 10-mark answer with headings, steps, examples, advantages and limitations where supported.',
@@ -152,6 +152,7 @@ Rules:
 - If the answer cannot be found in the context, state that clearly in {q_lang_name} instead of guessing.
 - Do not invent facts.
 - Cite sources using the [Source N] format.
+- Answer the specific question without repeating points. Finish within the requested length; do not add unrelated sections.
 
 Context:
 {context_text}

@@ -139,6 +139,14 @@ The existing interface, providers, SQLite database, and deployment entry points 
 - **Local OCR:** optional Tesseract reads scanned PDF pages; no OCR service or API key is required. Install Tesseract and its language packs locally, then set `OCR_LANGUAGES` (for example `eng+hin`). Docker includes English and Hindi. The default `OCR_MAX_PAGES=10` limits OCR work per upload; poor scans and missing language packs show extraction warnings.
 - **Streaming:** chat displays real provider deltas and supports Stop. Failed/stopped partial responses are not deliberately saved as completed answers or cached; the submitted user message remains in history. Cached completed answers arrive immediately.
 
+### Chat troubleshooting
+
+- A `200 OK` for `/api/chat/stream` means streaming began; an upstream provider can still fail after headers are sent. The chat now distinguishes an output limit, timeout, interrupted connection, rejected key, provider error, and rate limit. The server logs the provider and failure category without API keys or document text.
+- If an answer reaches its output limit, select **Explain in 2 minutes** or **2-mark answer**, or ask a narrower question. General answers are prompted to stay around 350 words. `AI_MAX_OUTPUT_TOKENS` defaults to 4096 and is bounded to 256–16384; increasing it may help longer answers but does not guarantee completion or override provider limits. No automatic continuation consumes an extra request.
+- Interrupted answers keep safe Markdown formatting and display a separate status message. They remain unsaved and uncached.
+- If hybrid search is slow, select **Document search → Keywords · skip embedding model**. This uses SQLite text search without loading or running the embedding model; wording matters more and cross-language/semantic matching is weaker. Hybrid remains the default. New startup timing logs help distinguish embedding initialization from the total search time.
+- Requests for Chrome's `/.well-known/appspecific/com.chrome.devtools.json` and optional `.js.map` debugging files can return 404 without affecting chat.
+
 ### Free-tier configuration and limits
 
 OpenRouter is pinned to `openrouter/free`; a paid model override is ignored. Gemini and Groq are disabled unless their respective `*_FREE_TIER_CONFIRMED=true` flags are set in `.env`. Set those flags only after checking that your account **and selected model** have free access without paid overflow in the provider console. The application cannot inspect external account billing, and a confirmation flag does not enforce a provider's billing settings. No application can promise unlimited free API access.

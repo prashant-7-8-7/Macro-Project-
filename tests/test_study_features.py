@@ -198,7 +198,7 @@ def test_stream_yields_real_deltas_and_does_not_cache_incomplete_output(monkeypa
     monkeypatch.setattr(budget.urllib.request, 'urlopen', lambda *args, **kwargs: Response())
     iterator = budget.stream('question')
     assert next(iterator) == 'first'
-    with pytest.raises(RuntimeError): next(iterator)
+    with pytest.raises(RuntimeError, match='connection.*interrupted'): next(iterator)
     assert budget.cached(budget.cache_key('openrouter','openrouter/free','question')) is None
 
 
@@ -224,7 +224,7 @@ def test_truncated_provider_stream_is_not_cached_as_a_complete_answer(monkeypatc
     monkeypatch.setattr(budget.urllib.request, 'urlopen', lambda *args, **kwargs: Response())
     iterator = budget.stream('truncated question')
     assert next(iterator) == 'cut short'
-    with pytest.raises(RuntimeError): next(iterator)
+    with pytest.raises(RuntimeError, match='output limit'): next(iterator)
     assert budget.cached(budget.cache_key('openrouter','openrouter/free','truncated question')) is None
 
 

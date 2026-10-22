@@ -84,11 +84,14 @@
         const content = node.querySelector('.message-content');
         $('chat-stop').classList.remove('hidden'); $('btn-send').disabled = true;
         let answer = '', completed = false;
+        const renderAnswer = () => {
+            content.innerHTML = DOMPurify.sanitize(marked.parse(answer), { USE_PROFILES: {html: true}, FORBID_TAGS: ['img', 'style', 'form', 'input'], FORBID_ATTR: ['style'] });
+        };
         try {
             const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: state.controller.signal,
                 body: JSON.stringify({ document_id: openDoc, document_ids: scope(), session_id: state.sessionId,
-                    query: text, answer_style: $('chat-answer-style').value })
+                    query: text, answer_style: $('chat-answer-style').value, mode: $('chat-search-mode').value })
             });
             if (!response.ok) await readApiResponse(response);
             if (!response.body) throw new Error('Streaming is not supported in this browser.');
@@ -111,7 +114,7 @@
                     if (event.type === 'error') throw new Error(event.message);
                     if (event.type === 'done') {
                         completed = true;
-                        content.innerHTML = DOMPurify.sanitize(marked.parse(answer), { USE_PROFILES: {html: true}, FORBID_TAGS: ['img', 'style', 'form', 'input'], FORBID_ATTR: ['style'] });
+                        renderAnswer();
                         enhanceCodeBlocks(node); attachAiMessageActions(node);
                         if (event.citations?.length) renderCitations(event.citations);
                         updateAiStatus(event.ai_available);
@@ -121,7 +124,12 @@
             }
             if (!completed) throw new Error('The connection ended before the answer was completed.');
         } catch (error) {
-            content.textContent = answer + (error.name === 'AbortError' ? '\n\nStopped. The partial answer was not saved.' : `\n\n${error.message}`);
+            renderAnswer();
+            const notice = document.createElement('p');
+            notice.setAttribute('role', 'status');
+            notice.textContent = error.name === 'AbortError' ? 'Stopped. The partial answer was not saved.' : error.message;
+            content.append(notice);
+            if (answer) enhanceCodeBlocks(node);
             updateAiStatus(false);
         } finally {
             state.busy = false; state.controller = null; $('chat-stop').classList.add('hidden'); $('btn-send').disabled = false;
