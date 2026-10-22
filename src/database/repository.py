@@ -2,6 +2,7 @@ import json
 import sqlite3
 from typing import List, Dict, Any, Optional, Tuple
 from src.database.db import get_connection
+from src.retrieval.query import topic_terms
 
 class DocumentRepository:
     _migrated = False
@@ -189,11 +190,8 @@ class DocumentRepository:
     def search_fts(self, query: str, top_k: int = 10, document_id: str = None,
                    filters: Optional[dict] = None) -> List[dict]:
         """Performs BM25 Full-Text Search using SQLite FTS5."""
-        # Escape query for FTS (remove quotes to prevent syntax errors)
-        safe_words = [w.replace('"', '') for w in query.split() if w.strip()]
-        escaped_query = ' '.join(f'"{word}"' for word in safe_words if word)
-        
-        if not escaped_query:
+        words = topic_terms(query)
+        if not words:
             return []
         scoped_filters = dict(filters or {})
         if document_id is not None:
@@ -201,7 +199,7 @@ class DocumentRepository:
         where, params = self._filter_sql(scoped_filters, "AND")
         conn = get_connection()
         try:
-            cursor = conn.execute("""
+            sql = """
                 SELECT c.id, c.document_id, c.chunk_index, c.content, d.filename,
                        d.file_type, d.language, c.page_number, bm25(fts_chunks) as rank_score
                 FROM fts_chunks f
@@ -211,10 +209,73 @@ class DocumentRepository:
             """ + where + """
                 ORDER BY rank_score
                 LIMIT ?
-            """, [escaped_query, *params, top_k])
-            return [dict(r) for r in cursor.fetchall()]
+            """
+            # Prefer chunks containing every topic term. If none match, relax
+            # to any topic term; natural questions need not occur verbatim.
+            for operator in (' AND ', ' OR '):
+                expression = operator.join(f'"{word}"' for word in words)
+                rows = [dict(r) for r in conn.execute(sql, [expression, *params, top_k])]
+                if rows:
+                    return rows
+            return []
         finally:
             conn.close()
+
+    def context_chunks(self, chunk_ids: List[str], filters: Optional[dict] = None) -> List[dict]:
+        """Read at most 50 cited/sampled chunks, still enforcing document scope."""
+        ids = list(dict.fromkeys(chunk_ids))[:50]
+        if not ids:
+            return []
+        where, params = self._filter_sql(filters, 'AND')
+        conn = get_connection()
+        try:
+            rows = conn.execute('''
+                SELECT c.id, c.document_id, c.chunk_index, c.content, c.page_number,
+                       d.filename, d.file_type, d.language, 0.0 AS rank_score
+                FROM document_chunks c JOIN documents d ON c.document_id = d.id
+                WHERE c.id IN (''' + ','.join('?' for _ in ids) + ')' + where, [*ids, *params])
+            by_id = {row['id']: dict(row) for row in rows}
+            return [by_id[ident] for ident in ids if ident in by_id]
+        finally:
+            conn.close()
+
+    def representative_chunks(self, filters: Optional[dict] = None, top_k: int = 6) -> List[dict]:
+        """Sample actual document text for topic-free overview requests only."""
+        if not 1 <= top_k <= 50:
+            raise ValueError('top_k must be between 1 and 50')
+        where, params = self._filter_sql(filters)
+        conn = get_connection()
+        try:
+            # Read only IDs while selecting samples, not every text/vector blob.
+            rows = conn.execute('''
+                SELECT c.id, c.document_id FROM document_chunks c
+                JOIN documents d ON c.document_id = d.id
+            ''' + where + ' ORDER BY c.document_id, c.chunk_index', params)
+            grouped = {}
+            for row in rows:
+                grouped.setdefault(row['document_id'], []).append(row['id'])
+        finally:
+            conn.close()
+        if not grouped:
+            return []
+        quotas = {ident: 0 for ident in grouped}
+        remaining = top_k
+        while remaining:
+            added = False
+            for ident, ids in grouped.items():
+                if remaining and quotas[ident] < len(ids):
+                    quotas[ident] += 1
+                    remaining -= 1
+                    added = True
+            if not added:
+                break
+        samples = []
+        for ident, ids in grouped.items():
+            count = quotas[ident]
+            samples.append([ids[i * (len(ids) - 1) // (count - 1)] if count > 1 else ids[0]
+                            for i in range(count)])
+        selected = [ids[i] for i in range(max(quotas.values())) for ids in samples if i < len(ids)]
+        return self.context_chunks(selected, filters)
 
     def delete_document(self, document_id: str):
         original = self.get_document(document_id)

@@ -28,3 +28,5 @@
 
 .sidebar.collapsed .subject-controls{display:none}
 .study-dialog label.study-check{display:flex;align-items:center}
+.assistant-title-group{flex-direction:column;align-items:flex-start;gap:3px}
+#ai-status-label{font-size:.72rem;font-weight:400;color:var(--text-secondary)}

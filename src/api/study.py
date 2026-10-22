@@ -14,6 +14,7 @@ from src.database.db import get_connection
 from src.ai import rag, budget
 from src.ingestion.ocr import original_path, render_page
 from src.retrieval.engine import HybridSearchEngine
+from src.retrieval.query import topic_terms, generic_request, refers_back, explicit_document_request
 
 router = APIRouter(prefix='/api')
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
@@ -121,14 +122,21 @@ def prepare_chat(payload):
         raise HTTPException(409, 'Start a new conversation when changing selected documents')
     if not session:
         session = repo.create_session(payload.document_id, scope)
-    history = repo.messages(session['id'])[-6:]
-    previous = [m['content'] for m in history if m['role'] == 'user'][-1:]
-    retrieval_query = payload.query
-    if previous and len(payload.query) < 140:
-        retrieval_query = previous[0] + '\nFollow-up: ' + payload.query
-        if history and history[-1]['role'] == 'assistant':
-            retrieval_query += '\n' + history[-1]['content'][:600]
-    contexts = HybridSearchEngine().search(retrieval_query[:4000], top_k=6, mode=payload.mode, filters={'document_ids': scope})
+    messages = repo.messages(session['id'])
+    history = messages[-6:]
+    previous_topic = next((m['content'] for m in reversed(messages)
+                           if m['role'] == 'user' and topic_terms(m['content'])), None)
+    filters = {'document_ids': scope}
+    terms = topic_terms(payload.query)
+    if generic_request(payload.query) and (not previous_topic or explicit_document_request(payload.query)):
+        contexts = DocumentRepository().representative_chunks(filters, top_k=6)
+    else:
+        retrieval_query = payload.query
+        if previous_topic and (not terms or refers_back(payload.query)):
+            retrieval_query = previous_topic + '\n' + payload.query
+        # Assistant output (including old no-context errors) is never a search
+        # query. It remains in the short conversation supplied to the model.
+        contexts = HybridSearchEngine().search(retrieval_query[:4000], top_k=6, mode=payload.mode, filters=filters)
     prepared = rag.prepare_answer(payload.query, contexts, history, payload.answer_style)
     return repo, session, prepared
 
@@ -144,7 +152,7 @@ async def chat_stream(payload: ChatRequest, request: Request):
         pieces = []
         await run_in_threadpool(repo.add_message, ident, 'user', payload.query)
         try:
-            yield event({'type': 'session', 'session_id': ident})
+            yield event({'type': 'session', 'session_id': ident, 'has_context': bool(prepared.get('prompt'))})
             if not prepared.get('prompt'):
                 pieces.append(prepared['answer'])
                 yield event({'type': 'delta', 'text': prepared['answer']})

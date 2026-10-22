@@ -83,6 +83,7 @@
         const node = appendMessage('ai', '', `stream-${Date.now()}`);
         const content = node.querySelector('.message-content');
         $('chat-stop').classList.remove('hidden'); $('btn-send').disabled = true;
+        updateAiStatus(null, 'Searching documents');
         let answer = '', completed = false;
         const renderAnswer = () => {
             content.innerHTML = DOMPurify.sanitize(marked.parse(answer), { USE_PROFILES: {html: true}, FORBID_TAGS: ['img', 'style', 'form', 'input'], FORBID_ATTR: ['style'] });
@@ -106,7 +107,10 @@
                     const dataLine = packet.split('\n').find(line => line.startsWith('data: '));
                     if (!dataLine) continue;
                     const event = JSON.parse(dataLine.slice(6));
-                    if (event.type === 'session') state.sessionId = event.session_id;
+                    if (event.type === 'session') {
+                        state.sessionId = event.session_id;
+                        updateAiStatus(null, event.has_context === false ? 'No matching text' : 'Generating answer');
+                    }
                     if (event.type === 'delta') {
                         answer += event.text; content.textContent = answer;
                         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -117,7 +121,7 @@
                         renderAnswer();
                         enhanceCodeBlocks(node); attachAiMessageActions(node);
                         if (event.citations?.length) renderCitations(event.citations);
-                        updateAiStatus(event.ai_available);
+                        updateAiStatus(event.ai_available, event.ai_available ? 'AI answered' : 'No matching text');
                     }
                 }
                 if (done) break;
@@ -130,7 +134,7 @@
             notice.textContent = error.name === 'AbortError' ? 'Stopped. The partial answer was not saved.' : error.message;
             content.append(notice);
             if (answer) enhanceCodeBlocks(node);
-            updateAiStatus(false);
+            updateAiStatus(false, error.name === 'AbortError' ? 'Stopped' : 'Response failed');
         } finally {
             state.busy = false; state.controller = null; $('chat-stop').classList.add('hidden'); $('btn-send').disabled = false;
             if (openDoc === docId()) await loadSessions(false);
