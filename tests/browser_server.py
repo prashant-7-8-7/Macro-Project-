@@ -26,6 +26,10 @@ for ident,title,text,kind in [('11111111-1111-1111-1111-111111111111','Rust note
         retain_original(ident,kind,path)
 
 def fake_stream(prompt):
+    if 'data link layer provides framing' in prompt.lower():
+        yield '**Data link layer**: The layer provides framing and node-to-node delivery. '
+        yield '[Source 1]'
+        return
     yield '**Memory safety**: Rust protects memory through ownership. '
     time.sleep(1.5 if 'stop test' in prompt.lower() else .2)
     yield '[Source 1]'

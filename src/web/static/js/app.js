@@ -493,12 +493,24 @@ document.addEventListener('DOMContentLoaded', () => {
     setupGlobalShortcuts();
 });
 
-function updateAiStatus(available) {
+function updateAiStatus(available, status) {
     const indicator = document.getElementById('ai-status');
     if (!indicator) return;
+    const label = status || (available === true ? 'AI answered' : available === false ? 'AI unavailable' : 'Not checked');
+    const descriptions = {
+        'Not checked': 'Submit a document question to check AI responses. This indicator is not a connection test.',
+        'AI answered': 'The last answer used AI or a completed AI response from the cache.',
+        'Searching documents': 'Finding source text in the selected documents before requesting an AI answer.',
+        'Generating answer': 'Source text was found; waiting for the AI response.',
+        'No matching text': 'No matching source text was found, so the AI provider was not called.',
+        'Stopped': 'You stopped the response. This does not test the provider connection.',
+        'Response failed': 'The latest answer could not be completed. Read its status message for the reason.',
+    };
     indicator.classList.toggle('online', available === true);
-    indicator.title = available === true ? 'Last AI request succeeded' : 'AI unavailable or not checked';
+    indicator.title = descriptions[label] || 'The last AI request was unavailable.';
     indicator.setAttribute('aria-label', indicator.title);
+    const text = document.getElementById('ai-status-label');
+    if (text) text.textContent = label;
 }
 
 // --- API Calls ---
