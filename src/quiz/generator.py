@@ -14,6 +14,30 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+def _parse_quiz_response(raw_text):
+    """Accept a complete JSON array/envelope, never a cut-off JSON prefix."""
+    text = raw_text.strip()
+    if text.startswith('```') and text.endswith('```'):
+        text = text.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            data = data.get('questions')
+        if not isinstance(data, list):
+            return None
+        questions = []
+        for item in data:
+            try:
+                question = QuizQuestion(**item)
+                if len(question.options) == 4 and sum(o.is_correct for o in question.options) == 1:
+                    questions.append(question)
+            except (ValueError, TypeError):
+                continue
+        return questions if questions or not data else None
+    except (ValueError, TypeError):
+        return None
+
+
 def _sample_contexts_for_batch(contexts: List[Dict], batch_index: int, total_batches: int, max_chunks: int = 25) -> List[Dict]:
     """
     Sample chunks across the whole document.
@@ -41,7 +65,10 @@ def _generate_single_batch(
     total_batches: int,
 ) -> List[QuizQuestion]:
     """Generate a single batch of questions using the LLM in the document's language."""
-    selected_contexts = _sample_contexts_for_batch(contexts, batch_idx, total_batches)
+    selected_contexts = _sample_contexts_for_batch(contexts, batch_idx, total_batches, max_chunks=6)
+    context_budget = max(1000, min(12000, int(os.environ.get('QUIZ_CONTEXT_CHARS', '6000'))))
+    per_chunk = max(1, context_budget // max(1, len(selected_contexts)))
+    selected_contexts = [{**ctx, 'content': ctx.get('content', '')[:per_chunk]} for ctx in selected_contexts]
 
     sample_text = " ".join(ctx.get("content", "") for ctx in selected_contexts[:3])
     lang_code = selected_contexts[0].get("language") if selected_contexts and selected_contexts[0].get("language") else detect_text_language(sample_text)
@@ -92,6 +119,7 @@ Rules:
     Remember, Understand, Apply, Analyze.
 13. Return ONLY valid JSON array.
 14. Do not wrap the JSON in markdown.
+15. Keep each explanation within 35 words, each option within 16 words, and source_quote within 280 characters. Finish the entire JSON array.
 
 JSON format:
 
@@ -134,49 +162,14 @@ DOCUMENT CONTENT:
         raw_text = call_llm(
             prompt,
             max_attempts_per_model=2,
+            validator=lambda text: _parse_quiz_response(text) is not None,
         )
 
         if not raw_text:
             logger.warning("[Quiz Generator] Batch %d returned empty response from LLM.", batch_idx + 1)
             return []
 
-        raw_text = raw_text.strip()
-        start_idx = raw_text.find('[')
-        end_idx = raw_text.rfind(']')
-
-        if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
-            json_str = raw_text[start_idx:end_idx+1]
-        else:
-            json_str = raw_text
-
-        data = json.loads(json_str)
-
-        if not isinstance(data, list):
-            logger.warning("[Quiz Generator] Batch %d response is not a JSON list.", batch_idx + 1)
-            return []
-
-        questions = []
-        for item in data:
-            try:
-                question = QuizQuestion(
-                    question=item["question"],
-                    options=item["options"],
-                    correct_answer=item["correct_answer"],
-                    topic=item.get("topic"),
-                    explanation=item.get("explanation"),
-                    difficulty=item.get("difficulty", difficulty),
-                    bloom_level=item.get("bloom_level"),
-                    source_page=item.get("source_page"),
-                    source_chunk_id=item.get("source_chunk_id"),
-                    source_quote=item.get("source_quote"),
-                )
-                questions.append(question)
-            except Exception as exc:
-                logger.warning(
-                    "[Quiz Generator] Skipping malformed question in batch %d: %s",
-                    batch_idx + 1,
-                    exc,
-                )
+        questions = _parse_quiz_response(raw_text) or []
 
         logger.info(
             "[Quiz Generator] Batch %d/%d produced %d valid questions.",
@@ -191,7 +184,7 @@ DOCUMENT CONTENT:
             "[Quiz Generator] Batch %d/%d encountered error: %s",
             batch_idx + 1,
             total_batches,
-            exc,
+            type(exc).__name__,
         )
         return []
 
@@ -205,14 +198,14 @@ def generate_questions(
 ) -> List[QuizQuestion]:
     """
     Generate candidate MCQs from retrieved document chunks using batch generation.
-    Batches are sized 3-5 questions per call and over-requests by ~1.3-1.5x to ensure sufficient pool.
+    Small batches limit output size; extra candidates compensate for validation drops.
     """
     if not contexts:
         return []
 
     # Over-request target to compensate for downstream validation drops
     over_request_target = math.ceil(num_questions * 1.35)
-    batch_size = 4 if num_questions <= 6 else 5
+    batch_size = 3
     total_batches = max(1, math.ceil(over_request_target / batch_size))
 
     logger.info(
@@ -243,6 +236,8 @@ def generate_questions(
             batch_idx=batch_idx + batch_offset,
             total_batches=total_batches + batch_offset,
         )
+        if not batch_questions:
+            break
 
         for q in batch_questions:
             normalized = " ".join(q.question.lower().split())

@@ -23,14 +23,14 @@ def _call_groq_api(api_key: str, prompt: str) -> Optional[str]:
     return single_request('groq', prompt)
 
 
-def call_llm(prompt: str, max_attempts_per_model: int = 2) -> Optional[str]:
+def call_llm(prompt: str, max_attempts_per_model: int = 2, validator=None) -> Optional[str]:
     """Cached, budgeted calls to the existing providers, with no paid fallback."""
     from src.ai.budget import generate, single_request
     return generate(prompt, {
         'gemini': lambda text: _call_gemini_api(os.environ.get('GEMINI_API_KEY', ''), text),
         'groq': lambda text: _call_groq_api(os.environ.get('GROQ_API_KEY', ''), text),
         'openrouter': lambda text: single_request('openrouter', text),
-    })
+    }, validator=validator)
 
 
 from src.ingestion.detector import detect_text_language
@@ -134,7 +134,7 @@ def prepare_answer(query: str, contexts: List[dict], history=None, answer_style=
         'simple': 'Explain in simple language with one example, readable in two minutes. Stay within 250 words.',
         '2_marks': 'Write a concise 2-mark exam answer with a definition and two key points.',
         '6_marks': 'Write a 6-mark exam answer with an introduction, numbered explanation, example, and conclusion.',
-        '10_marks': 'Write a detailed 10-mark answer with headings, steps, examples, advantages and limitations where supported.',
+        '10_marks': 'Write a complete 10-mark exam answer in about 550–750 words: introduction, 5–7 explained points, a supported example, and a short conclusion. Include advantages or limitations only when relevant and supported. Finish within 750 words.',
         'formulas': 'Extract relevant formulas, define each symbol, and give a worked example only when supported by the source.',
     }
     style = styles.get(answer_style, styles['general'])

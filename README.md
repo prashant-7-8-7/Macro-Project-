@@ -152,9 +152,29 @@ The existing interface, providers, SQLite database, and deployment entry points 
 
 ### Free-tier configuration and limits
 
-OpenRouter is pinned to `openrouter/free`; a paid model override is ignored. Gemini and Groq are disabled unless their respective `*_FREE_TIER_CONFIRMED=true` flags are set in `.env`. Set those flags only after checking that your account **and selected model** have free access without paid overflow in the provider console. The application cannot inspect external account billing, and a confirmation flag does not enforce a provider's billing settings. No application can promise unlimited free API access.
+OpenRouter accepts `openrouter/free` or an exact catalog model ID ending in `:free` through `OPENROUTER_MODEL`; paid model IDs are ignored and fall back to `openrouter/free`. The same guard applies when building requests. Gemini and Groq are disabled unless their respective `*_FREE_TIER_CONFIRMED=true` flags are set in `.env`. Set those flags only after checking that your account **and selected model** have free access without paid overflow in the provider console. The application cannot inspect external account billing, and a confirmation flag does not enforce a provider's billing settings. No application can promise unlimited free API access.
 
-Local daily request caps default to Gemini 20, Groq 50, and OpenRouter 40. They reset at midnight UTC, count attempted calls, and apply to chat, quizzes, summaries, flashcards, and notes together. A provider HTTP 429 pauses that provider locally for one hour. Only other configured, eligible free providers can be tried. Exhausting all available quota produces a readable error or the existing unavailable/partial-generation result. It never selects a paid OpenRouter model. The Study tab shows configuration and local usage; provider dashboards remain authoritative for real quota and billing.
+Local daily request caps default to Gemini 20, Groq 50, and OpenRouter 40. They reset at midnight UTC, count attempted calls, and apply to chat, quizzes, summaries, flashcards, and notes together. A provider HTTP 429 pauses that provider for its numeric `Retry-After` duration (bounded to 1–86400 seconds), or 60 seconds when no usable duration is supplied. Only other configured, eligible free providers can be tried. Exhausting all available quota produces a readable error or the existing unavailable/partial-generation result. It never selects a paid OpenRouter model. The Study tab shows configuration and local usage; provider dashboards remain authoritative for real quota and billing.
+
+For long exam answers and quizzes, a fixed instruction model avoids the free router selecting a different reasoning model on each request. As of October 2026, OpenRouter lists `meta-llama/llama-3.3-70b-instruct:free` at zero token pricing; availability and free quotas still apply. Keep your existing key and set:
+
+```env
+OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
+AI_MAX_OUTPUT_TOKENS=8192
+```
+
+The application default remains 4096 output tokens, bounded to 256–16384. Thinking tokens may share that allowance on reasoning models; hiding thinking text does not recover its budget. Ten-mark answers are prompted to finish within 550–750 words. Groq's current optional default is `qwen/qwen3.8-27b`, with reasoning disabled for that model; enable it only after confirming its Free Plan access in your account. Official references: [OpenRouter free Llama](https://openrouter.ai/meta-llama/llama-3.3-70b-instruct:free), [reasoning budgets](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens), [Groq limits](https://console.groq.com/docs/rate-limits).
+
+Check keys locally without generating text or sending documents:
+
+```bash
+python check_ai.py
+python check_ai.py --provider groq
+```
+
+The checker makes only a provider metadata GET and never prints keys. A successful result confirms metadata authentication; model permissions and generation quotas remain separate. HTTP 401 means replace the key in the provider dashboard and `.env`, then restart. HTTP 403 can mean permissions or account/budget restrictions, and HTTP 429 means rate limiting. A fresh key does not increase account-level quotas.
+
+Quiz generation requests at most three questions per batch and six sampled chunks within `QUIZ_CONTEXT_CHARS=6000` source characters. Source quotes and answer evidence are still checked against original chunks. Explicitly truncated non-streaming responses are rejected; invalid quiz JSON is not cached, and old invalid JSON cache entries are discarded before retrying. Provider failures stop further batch attempts and are reported instead of being described as insufficient document content. Smaller batches trade lower output size for more API requests, all subject to the shared local and provider limits.
 
 Completed responses are cached in SQLite for up to 30 days using a hash of provider, model, credential, and prompt. Repeating a cached request avoids another provider call. Cache entries, conversations, notes versions, quiz answers, cards, and OCR coordinates are local data. Back up the SQLite database and `data/originals` together; both require persistent storage when hosting. This remains a single-user prototype without authentication or per-user isolation; shared public hosting requires adding those controls.
 
