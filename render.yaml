@@ -11,3 +11,5 @@ services:
         sync: false
       - key: PORT
         value: 8000
+      - key: EMBEDDING_MODEL_NAME
+        value: all-MiniLM-L6-v2

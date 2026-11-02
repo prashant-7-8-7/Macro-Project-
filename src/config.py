@@ -17,5 +17,5 @@ ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".csv", ".json"}
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 
-# Embedding settings (multilingual by default, configurable via env var)
-EMBEDDING_MODEL_NAME = os.environ.get("EMBEDDING_MODEL_NAME", "paraphrase-multilingual-MiniLM-L12-v2")
+# Embedding settings (lightweight 80MB 384-dim model by default for fast deployments)
+EMBEDDING_MODEL_NAME = os.environ.get("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
