@@ -4,31 +4,27 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
 
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies (build-essential, curl, sqlite3)
+# Install minimal system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     curl \
-    sqlite3 tesseract-ocr tesseract-ocr-eng tesseract-ocr-hin \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch CPU-only first to prevent downloading giant multi-gigabyte CUDA binaries on Render
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-
-# Copy and install python dependencies
+# Copy and install python dependencies (CPU-only PyTorch to stay lightweight)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Pre-download sentence transformer model during Docker build so startup is instant
-ARG EMBEDDING_MODEL_NAME=paraphrase-multilingual-MiniLM-L12-v2
-ENV EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}
+# Pre-download lightweight sentence transformer model so startup is instant
 RUN python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['EMBEDDING_MODEL_NAME'])"
 
-# Copy the rest of the application code
+# Copy application source code
 COPY . .
 
 # Expose server port
